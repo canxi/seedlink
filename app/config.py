@@ -76,7 +76,6 @@ class Config:
             f"SCAN_INTERVAL={self._config['app']['scan_interval']}",
             f"VIDEO_EXTENSIONS={','.join(self._config['app']['video_extensions'])}",
             f"DEBUG={'true' if self._config['app']['debug'] else 'false'}",
-            f"DATABASE_URI={self._config['database']['uri']}",
         ]
 
         with open(env_path, 'w', encoding='utf-8') as f:

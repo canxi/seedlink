@@ -13,4 +13,5 @@ services:
       - /media:/media
     environment:
       - TZ=Asia/Shanghai
+      - DATABASE_URI=sqlite:////app/data/hardlinks.db
     restart: unless-stopped
