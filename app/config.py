@@ -1,5 +1,4 @@
 import os
-import yaml
 from typing import Any, Dict, List
 
 
@@ -14,23 +13,8 @@ class Config:
         return cls._instance
 
     def _load_config(self):
-        config_path = os.environ.get('CONFIG_PATH', '/app/config/config.yaml')
-
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                self._config = yaml.safe_load(f) or {}
-        else:
-            self._config = self._default_config()
-            self._ensure_directory(config_path)
-            self.save()
-
-    def _ensure_directory(self, config_path):
-        config_dir = os.path.dirname(config_path)
-        if config_dir and not os.path.exists(config_dir):
-            os.makedirs(config_dir, exist_ok=True)
-
-    def _default_config(self) -> Dict[str, Any]:
-        return {
+        # 只从环境变量读取配置
+        self._config = {
             'app': {
                 'source_folder': os.environ.get('SOURCE_FOLDER', '/downloads'),
                 'target_folder': os.environ.get('TARGET_FOLDER', '/media'),
@@ -64,12 +48,6 @@ class Config:
                 config[k] = {}
             config = config[k]
         config[keys[-1]] = value
-
-    def save(self):
-        config_path = os.environ.get('CONFIG_PATH', '/app/config/config.yaml')
-        self._ensure_directory(config_path)
-        with open(config_path, 'w', encoding='utf-8') as f:
-            yaml.safe_dump(self._config, f, allow_unicode=True, default_flow_style=False)
 
     @property
     def source_folder(self) -> str:

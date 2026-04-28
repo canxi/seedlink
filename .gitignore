@@ -46,8 +46,6 @@ data/
 *.log
 test_downloads/
 test_media/
-config/config.yaml
-config/*.yaml
 
 # Git
 .git/
