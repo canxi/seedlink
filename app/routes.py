@@ -11,6 +11,11 @@ from app.utils.video import format_duration, format_size
 bp = Blueprint('main', __name__)
 
 
+@bp.route('/logs')
+def logs():
+    return render_template('logs.html')
+
+
 @bp.route('/')
 def index():
     return render_template('index.html')
@@ -167,3 +172,22 @@ def watcher_stop():
     if watcher.is_running():
         watcher.stop()
     return jsonify({'success': True, 'running': watcher.is_running()})
+
+
+@bp.route('/api/logs', methods=['GET'])
+def get_logs():
+    from app.utils.log_buffer import get_log_buffer
+    level = request.args.get('level')
+    limit = int(request.args.get('limit', 100))
+    logs = get_log_buffer().get_logs(level=level, limit=limit)
+    return jsonify({
+        'logs': logs,
+        'total': len(logs)
+    })
+
+
+@bp.route('/api/logs/clear', methods=['POST'])
+def clear_logs():
+    from app.utils.log_buffer import get_log_buffer
+    get_log_buffer().clear()
+    return jsonify({'success': True, 'message': '日志已清空'})

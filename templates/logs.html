@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5><i class="bi bi-card-text"></i> 运行日志</h5>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <select id="logLevel" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                            <option value="">全部</option>
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                        <select id="logLimit" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                            <option value="50">50条</option>
+                            <option value="100" selected>100条</option>
+                            <option value="200">200条</option>
+                            <option value="500">500条</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary" onclick="loadLogs()">
+                            <i class="bi bi-arrow-clockwise"></i> 刷新
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="clearLogs()">
+                            <i class="bi bi-trash"></i> 清空
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                <pre id="logContent" style="font-size: 12px; margin: 0; white-space: pre-wrap; word-wrap: break-word;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let autoRefresh = false;
+let autoRefreshTimer = null;
+
+function loadLogs() {
+    const level = document.getElementById('logLevel').value;
+    const limit = document.getElementById('logLimit').value;
+
+    let url = `/api/logs?limit=${limit}`;
+    if (level) {
+        url += `&level=${level}`;
+    }
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const logContent = document.getElementById('logContent');
+            if (data.logs.length === 0) {
+                logContent.textContent = '暂无日志';
+                return;
+            }
+
+            let html = '';
+            data.logs.forEach(log => {
+                let colorClass = 'text-muted';
+                if (log.level === 'ERROR') {
+                    colorClass = 'text-danger';
+                } else if (log.level === 'WARNING') {
+                    colorClass = 'text-warning';
+                } else if (log.level === 'INFO') {
+                    colorClass = 'text-primary';
+                } else if (log.level === 'DEBUG') {
+                    colorClass = 'text-secondary';
+                }
+
+                html += `<span class="${colorClass}">[${log.timestamp}] [${log.level}] [${log.logger}] ${log.message}</span>\n`;
+            });
+            logContent.innerHTML = html;
+
+            // 自动滚动到底部
+            logContent.parentElement.scrollTop = logContent.parentElement.scrollHeight;
+        })
+        .catch(error => {
+            console.error('加载日志失败:', error);
+        });
+}
+
+function clearLogs() {
+    if (!confirm('确定要清空所有日志吗？')) {
+        return;
+    }
+
+    fetch('/api/logs/clear', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('日志已清空', 'success');
+                loadLogs();
+            }
+        })
+        .catch(error => {
+            console.error('清空日志失败:', error);
+        });
+}
+
+function toggleAutoRefresh() {
+    autoRefresh = !autoRefresh;
+    const btn = document.getElementById('btnAutoRefresh');
+
+    if (autoRefresh) {
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-primary');
+        btn.innerHTML = '<i class="bi bi-pause"></i> 停止自动刷新';
+        autoRefreshTimer = setInterval(loadLogs, 3000);
+    } else {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-primary');
+        btn.innerHTML = '<i class="bi bi-play"></i> 自动刷新';
+        if (autoRefreshTimer) {
+            clearInterval(autoRefreshTimer);
+            autoRefreshTimer = null;
+        }
+    }
+}
+
+// 页面加载时自动刷新一次
+document.addEventListener('DOMContentLoaded', loadLogs);
+</script>
+{% endblock %}

@@ -35,6 +35,12 @@ def create_app():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
+    # 初始化日志缓冲区
+    from app.utils.log_buffer import get_log_buffer
+    handler = get_log_buffer()
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logging.getLogger().addHandler(handler)
+
     db.init_app(app)
 
     with app.app_context():
