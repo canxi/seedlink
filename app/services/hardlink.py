@@ -4,6 +4,7 @@
 
 import os
 import logging
+from pathlib import Path
 from typing import Optional, Tuple
 from app.models import db, HardLink
 from app.utils.video import get_video_duration, get_video_info
@@ -17,30 +18,29 @@ class HardLinkService:
     @staticmethod
     def create_hardlink(source_path: str, target_path: str, duration: float = 0, file_size: int = 0) -> Tuple[bool, str]:
         try:
-            if not os.path.exists(source_path):
+            src = Path(source_path)
+            dest = Path(target_path)
+
+            if not src.exists():
                 return False, f"源文件不存在: {source_path}"
 
-            if os.path.exists(target_path):
+            if dest.exists():
                 return False, f"目标文件已存在: {target_path}"
 
-            target_dir = os.path.dirname(target_path)
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir, exist_ok=True)
+            dest.parent.mkdir(parents=True, exist_ok=True)
 
-            # 诊断信息：检查源和目标的文件系统
-            source_stat = os.stat(source_path)
-            target_stat = os.stat(target_dir)
-            logger.info(f"[诊断] 源文件设备: {source_stat.st_dev}, 目标目录设备: {target_stat.st_dev}, 是否同设备: {source_stat.st_dev == target_stat.st_dev}")
-            logger.info(f"[诊断] 源文件路径: {source_path}")
-            logger.info(f"[诊断] 目标路径: {target_path}")
-            logger.info(f"[诊断] 源文件 inode: {source_stat.st_ino}")
+            # 使用 pathlib 创建硬链接
+            dest.hardlink_to(src)
 
-            os.link(source_path, target_path)
+            # 验证硬链接是否有效（检查 inode 是否相同）
+            if dest.stat().st_ino != src.stat().st_ino:
+                dest.unlink()
+                return False, "硬链接创建失败：inode 不匹配"
 
             link_record = HardLink(
                 source_path=source_path,
                 link_path=target_path,
-                file_size=file_size or os.path.getsize(source_path),
+                file_size=file_size or src.stat().st_size,
                 duration=duration,
                 is_active=True
             )
