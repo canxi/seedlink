@@ -5,13 +5,13 @@ services:
     image: ghcr.io/canxi/seedlink:latest
     container_name: seedlink
     ports:
-      - "5200:5000"
+      - "5000:5000"
     volumes:
+      - ./config:/app/config
       - ./data:/app/data
       - /downloads:/downloads:ro
       - /media:/media
-    env_file:
-      - .env.docker
     environment:
+      - CONFIG_PATH=/app/config/config.json
       - TZ=Asia/Shanghai
     restart: unless-stopped

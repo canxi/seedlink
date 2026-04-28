@@ -41,7 +41,6 @@ htmlcov/
 Thumbs.db
 
 # Project specific - DO NOT COMMIT
-data/
 *.db
 *.log
 test_downloads/

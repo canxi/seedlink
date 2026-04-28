@@ -53,11 +53,13 @@ def update_settings():
     if 'video_extensions' in data:
         config.set('app.video_extensions', data['video_extensions'])
 
+    config.save()
+
     watcher = get_watcher()
     if watcher.is_running():
         watcher.restart()
 
-    return jsonify({'success': True, 'message': '设置已保存（重启后生效）'})
+    return jsonify({'success': True, 'message': '设置已保存'})
 
 
 @bp.route('/api/settings/scan', methods=['POST'])
@@ -140,7 +142,6 @@ def watcher_start():
     if watcher.is_running():
         return jsonify({'success': True, 'running': True, 'message': '监控已在运行'})
 
-    # 检查源文件夹是否存在
     if not os.path.exists(config.source_folder):
         return jsonify({
             'success': False,
