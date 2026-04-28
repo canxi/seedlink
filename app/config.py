@@ -29,6 +29,7 @@ class Config:
         return '.env.local'
 
     def _load_config(self):
+        """从环境变量加载配置到内存"""
         self._config = {
             'app': {
                 'source_folder': os.environ.get('SOURCE_FOLDER', '/downloads'),
@@ -43,7 +44,20 @@ class Config:
             }
         }
 
+    def reload(self):
+        """重新加载配置（从文件读取最新值）"""
+        # 重新加载 .env 文件
+        env_path = self._env_file_path()
+        if os.path.exists(env_path):
+            from dotenv import dotenv_values
+            env_vars = dotenv_values(env_path)
+            for key, value in env_vars.items():
+                os.environ[key] = value
+        # 重新加载到内存
+        self._load_config()
+
     def save(self):
+        """保存配置到文件"""
         env_path = self._env_file_path()
         env_dir = os.path.dirname(env_path)
         if env_dir and not os.path.exists(env_dir):
@@ -61,6 +75,9 @@ class Config:
 
         with open(env_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines))
+
+        # 保存后重新加载，更新 os.environ
+        self.reload()
 
     def get(self, key: str, default: Any = None) -> Any:
         keys = key.split('.')
