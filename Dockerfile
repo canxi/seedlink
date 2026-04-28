@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p /data /app/config && chown -R 1000:1000 /data /app/config
+RUN mkdir -p /data /app/config /app/data
 
 EXPOSE 5000
 
