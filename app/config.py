@@ -1,10 +1,12 @@
 import os
+import logging
 from typing import Any, Dict, List
+
+logger = logging.getLogger(__name__)
 
 try:
     from dotenv import load_dotenv
     # 本地开发加载 .env.local，Docker 环境由 env_file 加载
-    # override=True 确保 .env.local 中的值能覆盖系统环境变量
     env_local = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env.local')
     load_dotenv(env_local, override=True)
 except ImportError:
@@ -46,14 +48,18 @@ class Config:
 
     def reload(self):
         """重新加载配置（从文件读取最新值）"""
-        # 重新加载 .env 文件
         env_path = self._env_file_path()
+        logger.info(f"[Config] reload: 文件路径={env_path}, 存在={os.path.exists(env_path)}")
         if os.path.exists(env_path):
-            from dotenv import dotenv_values
-            env_vars = dotenv_values(env_path)
-            for key, value in env_vars.items():
-                os.environ[key] = value
-        # 重新加载到内存
+            try:
+                from dotenv import dotenv_values
+                env_vars = dotenv_values(env_path)
+                logger.info(f"[Config] reload: 读取到的变量={list(env_vars.keys())}")
+                for key, value in env_vars.items():
+                    os.environ[key] = value
+                logger.info(f"[Config] reload: SOURCE_FOLDER={os.environ.get('SOURCE_FOLDER')}, TARGET_FOLDER={os.environ.get('TARGET_FOLDER')}")
+            except Exception as e:
+                logger.error(f"[Config] reload 失败: {e}")
         self._load_config()
 
     def save(self):
@@ -76,7 +82,7 @@ class Config:
         with open(env_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines))
 
-        # 保存后重新加载，更新 os.environ
+        logger.info(f"[Config] save: 已保存到 {env_path}")
         self.reload()
 
     def get(self, key: str, default: Any = None) -> Any:
