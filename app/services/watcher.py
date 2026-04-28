@@ -140,6 +140,10 @@ class WatcherService:
         self.observer = None
         self._running = False
 
+    def _recreate_scanner(self):
+        self.scanner = ScannerService()
+        self.handler = VideoFileHandler(self.scanner)
+
     def start(self):
         if self._running:
             logger.warning("监控服务已在运行")
@@ -175,6 +179,8 @@ class WatcherService:
     def restart(self):
         self.stop()
         time.sleep(1)
+        # 重新加载配置并重建 scanner
+        self._recreate_scanner()
         self.start()
 
 

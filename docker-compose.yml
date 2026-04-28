@@ -12,6 +12,6 @@ services:
       - /downloads:/downloads:ro
       - /media:/media
     environment:
-      - CONFIG_PATH=/app/config/config.json
+      - ENV_FILE=/app/config/.env
       - TZ=Asia/Shanghai
     restart: unless-stopped

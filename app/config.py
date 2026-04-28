@@ -1,6 +1,12 @@
 import os
-import json
 from typing import Any, Dict, List
+
+# 尝试加载 .env 文件
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 class Config:
@@ -13,43 +19,42 @@ class Config:
             cls._instance._load_config()
         return cls._instance
 
-    def _config_file_path(self) -> str:
-        return os.environ.get('CONFIG_PATH', '/app/config/config.json')
+    def _env_file_path(self) -> str:
+        return os.environ.get('ENV_FILE', '.env')
 
     def _load_config(self):
-        config_path = self._config_file_path()
-
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    self._config = json.load(f)
-                return
-            except Exception:
-                pass
-
-        # 使用环境变量或默认值
         self._config = {
             'app': {
                 'source_folder': os.environ.get('SOURCE_FOLDER', '/downloads'),
                 'target_folder': os.environ.get('TARGET_FOLDER', '/media'),
                 'min_duration': int(os.environ.get('MIN_DURATION', 600)),
                 'scan_interval': int(os.environ.get('SCAN_INTERVAL', 60)),
-                'video_extensions': ['.mkv', '.mp4', '.avi', '.ts', '.mov', '.wmv', '.flv'],
+                'video_extensions': os.environ.get('VIDEO_EXTENSIONS', '.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv').split(','),
                 'debug': os.environ.get('DEBUG', 'false').lower() == 'true'
             },
             'database': {
                 'uri': os.environ.get('DATABASE_URI', 'sqlite:///data/hardlinks.db')
             }
         }
-        self.save()
 
     def save(self):
-        config_path = self._config_file_path()
-        config_dir = os.path.dirname(config_path)
-        if config_dir and not os.path.exists(config_dir):
-            os.makedirs(config_dir, exist_ok=True)
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(self._config, f, indent=2, ensure_ascii=False)
+        env_path = self._env_file_path()
+        env_dir = os.path.dirname(env_path)
+        if env_dir and not os.path.exists(env_dir):
+            os.makedirs(env_dir, exist_ok=True)
+
+        lines = [
+            f"SOURCE_FOLDER={self._config['app']['source_folder']}",
+            f"TARGET_FOLDER={self._config['app']['target_folder']}",
+            f"MIN_DURATION={self._config['app']['min_duration']}",
+            f"SCAN_INTERVAL={self._config['app']['scan_interval']}",
+            f"VIDEO_EXTENSIONS={','.join(self._config['app']['video_extensions'])}",
+            f"DEBUG={'true' if self._config['app']['debug'] else 'false'}",
+            f"DATABASE_URI={self._config['database']['uri']}",
+        ]
+
+        with open(env_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines))
 
     def get(self, key: str, default: Any = None) -> Any:
         keys = key.split('.')
@@ -90,7 +95,10 @@ class Config:
 
     @property
     def video_extensions(self) -> List[str]:
-        return self.get('app.video_extensions', ['.mkv', '.mp4', '.avi', '.ts'])
+        ext = self.get('app.video_extensions', ['.mkv', '.mp4', '.avi', '.ts'])
+        if isinstance(ext, str):
+            ext = ext.split(',')
+        return ext
 
     @property
     def debug(self) -> bool:
