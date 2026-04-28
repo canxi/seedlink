@@ -41,7 +41,12 @@ class ScannerService:
             logger.warning(f"文件夹不存在: {folder}")
             return video_files
 
+        target_abs = os.path.abspath(self.target_folder)
+
         for root, _, files in os.walk(folder):
+            root_abs = os.path.abspath(root)
+            if root_abs.startswith(target_abs):
+                continue
             for filename in files:
                 if self.is_video_file(filename):
                     video_files.append(os.path.join(root, filename))

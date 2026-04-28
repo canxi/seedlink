@@ -27,7 +27,10 @@ class VideoFileHandler(FileSystemEventHandler):
     def _is_dir_in_source(self, path: str) -> bool:
         try:
             source = os.path.abspath(self.scanner.source_folder)
+            target = os.path.abspath(self.scanner.target_folder)
             path = os.path.abspath(path)
+            if path.startswith(target):
+                return False
             return path.startswith(source)
         except:
             return False
