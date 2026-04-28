@@ -11,7 +11,8 @@ services:
       - ./data:/app/data
       - /downloads:/downloads:ro
       - /media:/media
+    env_file:
+      - .env.docker
     environment:
-      - ENV_FILE=/app/config/.env
       - TZ=Asia/Shanghai
     restart: unless-stopped
