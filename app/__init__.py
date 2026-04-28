@@ -36,13 +36,15 @@ def create_app():
 
     # 配置日志输出到文件和控制台
     log_file = '/app/data/seedlink.log'
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    console_handler = logging.StreamHandler()
+
     logging.basicConfig(
         level=logging.DEBUG if config.debug else logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler()
-        ]
+        handlers=[file_handler, console_handler]
     )
 
     # 初始化日志缓冲区
