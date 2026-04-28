@@ -24,9 +24,9 @@ class Config:
         return cls._instance
 
     def _env_file_path(self) -> str:
-        # Docker 环境: /app/config/.env (挂载自 .env.docker)
+        # Docker 环境: /app/config/.env (config 目录存在说明是 Docker 环境)
         # 本地开发: .env.local
-        if os.path.exists('/app/config/.env'):
+        if os.path.exists('/app/config'):
             return '/app/config/.env'
         return '.env.local'
 
