@@ -128,6 +128,9 @@ minDurationSlider.addEventListener('input', function() {
 async function loadSettings() {
     try {
         const response = await fetch('/api/settings');
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
         const data = await response.json();
 
         document.getElementById('sourceFolder').value = data.source_folder;
@@ -141,7 +144,7 @@ async function loadSettings() {
         });
     } catch (error) {
         console.error('加载设置失败:', error);
-        alert('加载设置失败: ' + error.message);
+        showToast('加载设置失败: ' + error.message, 'danger');
     }
 }
 
@@ -172,15 +175,19 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
             body: JSON.stringify(data)
         });
 
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+
         const result = await response.json();
         if (result.success) {
-            showToast('设置已保存', 'success');
+            showToast(result.message || '设置已保存', 'success');
         } else {
-            showToast('保存失败: ' + result.message, 'danger');
+            showToast(result.message || '保存失败', 'danger');
         }
     } catch (error) {
         console.error('保存设置失败:', error);
-        showToast('保存失败: ' + error.message, 'danger');
+        showToast('保存设置失败: ' + error.message, 'danger');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-save"></i> 保存设置';
