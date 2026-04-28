@@ -40,10 +40,6 @@ def get_settings():
 
 @bp.route('/api/settings', methods=['PUT'])
 def update_settings():
-    """
-    更新配置 - 注意：环境变量配置需要在 .env 文件中修改并重启应用
-    此接口仅更新内存中的配置，重启后失效
-    """
     data = request.get_json()
 
     if 'source_folder' in data:
@@ -141,8 +137,18 @@ def watcher_status():
 @bp.route('/api/watcher/start', methods=['POST'])
 def watcher_start():
     watcher = get_watcher()
-    if not watcher.is_running():
-        watcher.start()
+    if watcher.is_running():
+        return jsonify({'success': True, 'running': True, 'message': '监控已在运行'})
+
+    # 检查源文件夹是否存在
+    if not os.path.exists(config.source_folder):
+        return jsonify({
+            'success': False,
+            'running': False,
+            'message': f'源文件夹不存在: {config.source_folder}'
+        }), 400
+
+    watcher.start()
     return jsonify({'success': True, 'running': watcher.is_running()})
 
 
