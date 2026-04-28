@@ -182,15 +182,24 @@ async function toggleWatcher() {
         const statusResponse = await fetch('/api/watcher/status');
         const statusData = await statusResponse.json();
 
+        let response;
         if (statusData.running) {
-            await fetch('/api/watcher/stop', { method: 'POST' });
+            response = await fetch('/api/watcher/stop', { method: 'POST' });
         } else {
-            await fetch('/api/watcher/start', { method: 'POST' });
+            response = await fetch('/api/watcher/start', { method: 'POST' });
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message || '操作失败', 'danger');
+        } else {
+            showToast(statusData.running ? '监控已停止' : '监控已启动', 'success');
         }
 
         loadStats();
     } catch (error) {
         console.error('切换监控状态失败:', error);
+        showToast('切换监控状态失败', 'danger');
     }
 }
 
