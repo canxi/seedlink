@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-link-45deg"></i> 硬链接总数</h5>
+                <h2 id="totalLinks">-</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-hdd"></i> 总大小</h5>
+                <h2 id="totalSize">-</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white mb-3" id="watcherCard">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-eye"></i> 监控状态</h5>
+                <h2 id="watcherStatus">-</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-clock"></i> 最小视频时长</h5>
+                <h2 id="minDuration">-</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">路径配置</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>源文件夹：</strong> <code id="sourceFolder">-</code></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>目标文件夹：</strong> <code id="targetFolder">-</code></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">快速操作</h5>
+                <button class="btn btn-primary" id="btnScan" onclick="triggerScan(this)">
+                    <i class="bi bi-search"></i> 手动扫描
+                </button>
+                <button class="btn btn-success" id="btnWatcherToggle" onclick="toggleWatcher()">
+                    <i class="bi bi-play"></i> 启动监控
+                </button>
+                <button class="btn btn-warning" onclick="location.href='/settings'">
+                    <i class="bi bi-gear"></i> 配置设置
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">最近创建的硬链接</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>原始文件</th>
+                            <th>硬链接路径</th>
+                            <th>时长</th>
+                            <th>大小</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentLinksTable">
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="scanResultModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">扫描结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="scanResultBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats');
+        const data = await response.json();
+
+        document.getElementById('totalLinks').textContent = data.total_links;
+        document.getElementById('totalSize').textContent = data.total_size_formatted;
+        document.getElementById('sourceFolder').textContent = data.source_folder;
+        document.getElementById('targetFolder').textContent = data.target_folder;
+        document.getElementById('minDuration').textContent = formatDuration(data.min_duration);
+
+        const statusEl = document.getElementById('watcherStatus');
+        const cardEl = document.getElementById('watcherCard');
+        if (data.watching) {
+            statusEl.textContent = '运行中';
+            cardEl.classList.remove('bg-secondary');
+            cardEl.classList.add('bg-info');
+        } else {
+            statusEl.textContent = '已停止';
+            cardEl.classList.remove('bg-info');
+            cardEl.classList.add('bg-secondary');
+        }
+
+        updateWatcherButton(data.watching);
+
+        const tbody = document.getElementById('recentLinksTable');
+        if (data.recent_links.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无数据</td></tr>';
+        } else {
+            tbody.innerHTML = data.recent_links.map(link => `
+                <tr>
+                    <td><small>${escapeHtml(link.source_path)}</small></td>
+                    <td><small>${escapeHtml(link.link_path)}</small></td>
+                    <td>${formatDuration(link.duration)}</td>
+                    <td>${formatSize(link.file_size)}</td>
+                    <td>${formatDate(link.created_at)}</td>
+                </tr>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('加载统计数据失败:', error);
+    }
+}
+
+function updateWatcherButton(running) {
+    const btn = document.getElementById('btnWatcherToggle');
+    if (running) {
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-danger');
+        btn.innerHTML = '<i class="bi bi-stop"></i> 停止监控';
+    } else {
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-success');
+        btn.innerHTML = '<i class="bi bi-play"></i> 启动监控';
+    }
+}
+
+async function toggleWatcher() {
+    try {
+        const statusResponse = await fetch('/api/watcher/status');
+        const statusData = await statusResponse.json();
+
+        if (statusData.running) {
+            await fetch('/api/watcher/stop', { method: 'POST' });
+        } else {
+            await fetch('/api/watcher/start', { method: 'POST' });
+        }
+
+        loadStats();
+    } catch (error) {
+        console.error('切换监控状态失败:', error);
+    }
+}
+
+async function triggerScan(btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 扫描中...';
+
+    try {
+        const response = await fetch('/api/settings/scan', { method: 'POST' });
+        const data = await response.json();
+
+        let resultHtml = `<p>处理文件数: ${data.processed}</p>`;
+        resultHtml += `<p>创建硬链接数: ${data.created}</p>`;
+        if (data.errors.length > 0) {
+            resultHtml += `<p class="text-danger">错误:</p><ul>`;
+            data.errors.forEach(err => {
+                resultHtml += `<li><small>${escapeHtml(err)}</small></li>`;
+            });
+            resultHtml += `</ul>`;
+        }
+
+        document.getElementById('scanResultBody').innerHTML = resultHtml;
+        new bootstrap.Modal(document.getElementById('scanResultModal')).show();
+
+        loadStats();
+    } catch (error) {
+        console.error('扫描失败:', error);
+        alert('扫描失败: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-search"></i> 手动扫描';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadStats);
+</script>
+{% endblock %}

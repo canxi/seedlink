@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-8">
+        <div class="input-group">
+            <input type="text" class="form-control" id="searchInput" placeholder="搜索文件名或路径...">
+            <button class="btn btn-primary" type="button" onclick="loadLinks()">
+                <i class="bi bi-search"></i> 搜索
+            </button>
+        </div>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="form-check form-switch d-inline-block me-3">
+            <input class="form-check-input" type="checkbox" id="showInactive">
+            <label class="form-check-label" for="showInactive">显示已删除</label>
+        </div>
+        <button class="btn btn-outline-secondary" onclick="loadLinks()">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-hover table-responsive">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>原始文件</th>
+                            <th>硬链接路径</th>
+                            <th>时长</th>
+                            <th>大小</th>
+                            <th>创建时间</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="linksTable">
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="deleteConfirmBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmDelete">确认删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentDeleteId = null;
+let currentDeleteType = null;
+
+async function loadLinks() {
+    const search = document.getElementById('searchInput').value;
+    const includeInactive = document.getElementById('showInactive').checked;
+
+    try {
+        const response = await fetch(`/api/links?search=${encodeURIComponent(search)}&include_inactive=${includeInactive}`);
+        const data = await response.json();
+
+        const tbody = document.getElementById('linksTable');
+        if (data.links.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无数据</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.links.map(link => `
+            <tr class="${link.is_active ? '' : 'table-secondary'}">
+                <td>${link.id}</td>
+                <td><small>${escapeHtml(link.source_path)}</small></td>
+                <td><small>${escapeHtml(link.link_path)}</small></td>
+                <td>${formatDuration(link.duration)}</td>
+                <td>${formatSize(link.file_size)}</td>
+                <td>${formatDate(link.created_at)}</td>
+                <td>
+                    ${link.is_active
+                        ? '<span class="badge bg-success">活跃</span>'
+                        : '<span class="badge bg-secondary">已删除</span>'}
+                </td>
+                <td>
+                    ${link.is_active ? `
+                        <button class="btn btn-sm btn-outline-danger" onclick="confirmDelete(${link.id}, 'link')">
+                            <i class="bi bi-trash"></i> 删除硬链接
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="confirmDelete(${link.id}, 'source')">
+                            <i class="bi bi-x-circle"></i> 删除原文件
+                        </button>
+                    ` : ''}
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('加载硬链接列表失败:', error);
+    }
+}
+
+function confirmDelete(id, type) {
+    currentDeleteId = id;
+    currentDeleteType = type;
+
+    const body = document.getElementById('deleteConfirmBody');
+    if (type === 'link') {
+        body.innerHTML = '<p>确定要删除此硬链接吗？</p><p class="text-muted small">硬链接文件将被删除，但原始文件保留。</p>';
+        document.getElementById('btnConfirmDelete').className = 'btn btn-outline-danger';
+    } else {
+        body.innerHTML = '<p class="text-danger">确定要删除原始文件和硬链接吗？</p><p class="text-muted small">此操作将同时删除原始文件和所有硬链接，且不可恢复！</p>';
+        document.getElementById('btnConfirmDelete').className = 'btn btn-danger';
+    }
+
+    new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
+}
+
+document.getElementById('btnConfirmDelete').addEventListener('click', async function() {
+    if (!currentDeleteId) return;
+
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        let url, method;
+        if (currentDeleteType === 'link') {
+            url = `/api/links/${currentDeleteId}`;
+            method = 'DELETE';
+        } else {
+            url = `/api/links/${currentDeleteId}/delete-source`;
+            method = 'DELETE';
+        }
+
+        const response = await fetch(url, { method });
+        const data = await response.json();
+
+        bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal')).hide();
+
+        if (data.success) {
+            showToast(data.message, 'success');
+        } else {
+            showToast(data.message, 'danger');
+        }
+
+        loadLinks();
+    } catch (error) {
+        console.error('删除失败:', error);
+        showToast('删除失败: ' + error.message, 'danger');
+    } finally {
+        this.disabled = false;
+        this.innerHTML = '确认删除';
+        currentDeleteId = null;
+        currentDeleteType = null;
+    }
+});
+
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        loadLinks();
+    }
+});
+
+document.getElementById('showInactive').addEventListener('change', loadLinks);
+
+document.addEventListener('DOMContentLoaded', loadLinks);
+</script>
+{% endblock %}

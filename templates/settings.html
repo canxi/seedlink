@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">基本设置</h5>
+            </div>
+            <div class="card-body">
+                <form id="settingsForm">
+                    <div class="mb-3">
+                        <label for="sourceFolder" class="form-label">源文件夹路径</label>
+                        <input type="text" class="form-control" id="sourceFolder" name="source_folder" required>
+                        <small class="text-muted">PT 下载目录，监控此文件夹中的新视频文件</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="targetFolder" class="form-label">目标文件夹路径</label>
+                        <input type="text" class="form-control" id="targetFolder" name="target_folder" required>
+                        <small class="text-muted">硬链接创建的目标目录</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="minDuration" class="form-label">最小视频时长: <span id="minDurationValue">600</span> 秒</label>
+                        <input type="range" class="form-range" id="minDuration" name="min_duration" min="60" max="7200" step="60" value="600">
+                        <small class="text-muted">视频时长小于此值的文件不会创建硬链接 (1分钟 - 2小时)</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="scanInterval" class="form-label">扫描间隔 (秒)</label>
+                        <input type="number" class="form-control" id="scanInterval" name="scan_interval" min="10" max="3600" value="60">
+                        <small class="text-muted">自动扫描的间隔时间</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">视频文件扩展名</label>
+                        <div class="row" id="extensionsContainer">
+                            <div class="col-md-3">
+                                <div class="form-check">
+                                    <input class="form-check-input extension-checkbox" type="checkbox" value=".mkv" id="extMkv">
+                                    <label class="form-check-label" for="extMkv">.mkv</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check">
+                                    <input class="form-check-input extension-checkbox" type="checkbox" value=".mp4" id="extMp4">
+                                    <label class="form-check-label" for="extMp4">.mp4</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check">
+                                    <input class="form-check-input extension-checkbox" type="checkbox" value=".avi" id="extAvi">
+                                    <label class="form-check-label" for="extAvi">.avi</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check">
+                                    <input class="form-check-input extension-checkbox" type="checkbox" value=".ts" id="extTs">
+                                    <label class="form-check-label" for="extTs">.ts</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check">
+                                    <input class="form-check-input extension-checkbox" type="checkbox" value=".mov" id="extMov">
+                                    <label class="form-check-label" for="extMov">.mov</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check">
+                                    <input class="form-check-input extension-checkbox" type="checkbox" value=".wmv" id="extWmv">
+                                    <label class="form-check-label" for="extWmv">.wmv</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check">
+                                    <input class="form-check-input extension-checkbox" type="checkbox" value=".flv" id="extFlv">
+                                    <label class="form-check-label" for="extFlv">.flv</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="btnSave">
+                        <i class="bi bi-save"></i> 保存设置
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="location.href='/'">
+                        <i class="bi bi-arrow-left"></i> 返回
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">说明</h5>
+            </div>
+            <div class="card-body">
+                <h6>硬链接说明</h6>
+                <p><small>硬链接是指同一个文件系统中多个文件指向同一物理存储位置的链接方式。删除任一文件不会影响其他文件。</small></p>
+
+                <h6>使用场景</h6>
+                <p><small>PT 下载视频后，需要保留种子但又想整理到媒体库时，可以使用硬链接避免重复占用空间。</small></p>
+
+                <h6>注意事项</h6>
+                <ul>
+                    <li><small>硬链接只能在同一文件系统内创建</small></li>
+                    <li><small>视频时长低于阈值的文件不会被创建硬链接</small></li>
+                    <li><small>删除原文件时，硬链接文件也会被自动删除</small></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const minDurationSlider = document.getElementById('minDuration');
+const minDurationValue = document.getElementById('minDurationValue');
+
+minDurationSlider.addEventListener('input', function() {
+    minDurationValue.textContent = this.value;
+});
+
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+
+        document.getElementById('sourceFolder').value = data.source_folder;
+        document.getElementById('targetFolder').value = data.target_folder;
+        document.getElementById('minDuration').value = data.min_duration;
+        minDurationValue.textContent = data.min_duration;
+        document.getElementById('scanInterval').value = data.scan_interval;
+
+        document.querySelectorAll('.extension-checkbox').forEach(cb => {
+            cb.checked = data.video_extensions.includes(cb.value);
+        });
+    } catch (error) {
+        console.error('加载设置失败:', error);
+        alert('加载设置失败: ' + error.message);
+    }
+}
+
+document.getElementById('settingsForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const btn = document.getElementById('btnSave');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 保存中...';
+
+    const extensions = [];
+    document.querySelectorAll('.extension-checkbox:checked').forEach(cb => {
+        extensions.push(cb.value);
+    });
+
+    const data = {
+        source_folder: document.getElementById('sourceFolder').value,
+        target_folder: document.getElementById('targetFolder').value,
+        min_duration: parseInt(document.getElementById('minDuration').value),
+        scan_interval: parseInt(document.getElementById('scanInterval').value),
+        video_extensions: extensions
+    };
+
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showToast('设置已保存', 'success');
+        } else {
+            showToast('保存失败: ' + result.message, 'danger');
+        }
+    } catch (error) {
+        console.error('保存设置失败:', error);
+        showToast('保存失败: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-save"></i> 保存设置';
+    }
+});
+
+document.addEventListener('DOMContentLoaded', loadSettings);
+</script>
+{% endblock %}
