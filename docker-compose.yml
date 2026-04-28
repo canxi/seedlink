@@ -2,15 +2,15 @@ version: '3.8'
 
 services:
   app:
-    image: canxi/seedlink:latest
+    image: ghcr.io/canxi/seedlink:latest
     container_name: seedlink
     ports:
       - "5000:5000"
     volumes:
       - ./config:/app/config
-      - /downloads:/downloads:ro
-      - /downloads:/media
       - ./data:/data
+      - /downloads:/downloads:ro
+      - /media:/media
     environment:
       - TZ=Asia/Shanghai
     restart: unless-stopped
