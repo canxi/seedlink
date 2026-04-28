@@ -29,6 +29,9 @@ class HardLinkService:
 
             dest.parent.mkdir(parents=True, exist_ok=True)
 
+            logger.info(f"[诊断] 创建硬链接前 - 源: {src}, 目标: {dest}")
+            logger.info(f"[诊断] 源文件 stat: {src.stat()}")
+
             # 使用 pathlib 创建硬链接
             dest.hardlink_to(src)
 
@@ -36,6 +39,11 @@ class HardLinkService:
             if dest.stat().st_ino != src.stat().st_ino:
                 dest.unlink()
                 return False, "硬链接创建失败：inode 不匹配"
+
+            # 诊断：列出目标目录内容
+            logger.info(f"[诊断] 创建硬链接后 - 目标文件是否存在: {dest.exists()}")
+            logger.info(f"[诊断] 目标目录内容: {list(dest.parent.iterdir())}")
+            logger.info(f"[诊断] 目标文件 stat: {dest.stat()}")
 
             link_record = HardLink(
                 source_path=source_path,
