@@ -44,34 +44,37 @@ class VideoFileHandler(FileSystemEventHandler):
             if not os.path.exists(file_path):
                 return
 
-            if HardLinkService.get_link_by_source(file_path):
-                logger.debug(f"文件已有硬链接记录: {file_path}")
-                return
+            from app import create_app
+            app = create_app()
+            with app.app_context():
+                if HardLinkService.get_link_by_source(file_path):
+                    logger.debug(f"文件已有硬链接记录: {file_path}")
+                    return
 
-            from app.utils.video import get_video_duration
-            duration = get_video_duration(file_path)
-            if duration is None:
-                logger.warning(f"无法获取视频时长: {file_path}")
-                return
+                from app.utils.video import get_video_duration
+                duration = get_video_duration(file_path)
+                if duration is None:
+                    logger.warning(f"无法获取视频时长: {file_path}")
+                    return
 
-            if duration < self.scanner.min_duration:
-                logger.info(f"视频时长 {duration}s 小于阈值 {self.scanner.min_duration}s: {file_path}")
-                return
+                if duration < self.scanner.min_duration:
+                    logger.info(f"视频时长 {duration}s 小于阈值 {self.scanner.min_duration}s: {file_path}")
+                    return
 
-            file_size = os.path.getsize(file_path)
-            target_path = self.scanner.get_target_path(file_path)
+                file_size = os.path.getsize(file_path)
+                target_path = self.scanner.get_target_path(file_path)
 
-            success, message = HardLinkService.create_hardlink(
-                source_path=file_path,
-                target_path=target_path,
-                duration=duration,
-                file_size=file_size
-            )
+                success, message = HardLinkService.create_hardlink(
+                    source_path=file_path,
+                    target_path=target_path,
+                    duration=duration,
+                    file_size=file_size
+                )
 
-            if success:
-                logger.info(f"自动创建硬链接成功: {file_path}")
-            else:
-                logger.error(f"自动创建硬链接失败: {message}")
+                if success:
+                    logger.info(f"自动创建硬链接成功: {file_path}")
+                else:
+                    logger.error(f"自动创建硬链接失败: {message}")
 
         except Exception as e:
             logger.error(f"处理新文件失败 {file_path}: {e}")
@@ -106,13 +109,16 @@ class VideoFileHandler(FileSystemEventHandler):
         logger.info(f"检测到文件删除: {event.src_path}")
 
         try:
-            link = HardLinkService.get_link_by_source(event.src_path)
+            from app import create_app
+            app = create_app()
+            with app.app_context():
+                link = HardLinkService.get_link_by_source(event.src_path)
 
-            if link and os.path.exists(link.link_path):
-                os.remove(link.link_path)
-                logger.info(f"自动删除硬链接: {link.link_path}")
+                if link and os.path.exists(link.link_path):
+                    os.remove(link.link_path)
+                    logger.info(f"自动删除硬链接: {link.link_path}")
 
-            HardLinkService.remove_by_source(event.src_path, delete_source=False)
+                HardLinkService.remove_by_source(event.src_path, delete_source=False)
 
         except Exception as e:
             logger.error(f"处理文件删除失败 {event.src_path}: {e}")
@@ -179,7 +185,6 @@ class WatcherService:
     def restart(self):
         self.stop()
         time.sleep(1)
-        # 重新加载配置并重建 scanner
         self._recreate_scanner()
         self.start()
 
