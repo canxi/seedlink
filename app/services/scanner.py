@@ -16,13 +16,15 @@ logger = logging.getLogger(__name__)
 class ScannerService:
 
     def __init__(self):
+        # 每次创建时重新加载配置
+        config.reload()
         self.source_folder = config.source_folder
         self.target_folder = config.target_folder
         self.min_duration = config.min_duration
         self.video_extensions = config.video_extensions
 
     def refresh_config(self):
-        config._load_config()
+        config.reload()
         self.source_folder = config.source_folder
         self.target_folder = config.target_folder
         self.min_duration = config.min_duration
@@ -54,16 +56,6 @@ class ScannerService:
         return os.path.join(self.target_folder, relative_path)
 
     def scan_and_create_hardlinks(self) -> Tuple[int, int, List[str], List[str]]:
-        """
-        扫描源文件夹并创建符合条件的硬链接
-
-        Returns:
-            Tuple[int, int, List[str], List[str]]:
-                - 处理的文件数
-                - 创建的硬链接数
-                - 错误信息列表
-                - 跳过的文件及原因列表
-        """
         self.refresh_config()
 
         processed = 0

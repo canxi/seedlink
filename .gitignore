@@ -43,8 +43,8 @@ Thumbs.db
 # Project specific - DO NOT COMMIT
 *.db
 *.log
-test_downloads/
-test_media/
+downloads/
+media/
 
 # Git
 .git/
