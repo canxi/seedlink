@@ -12,7 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 RUN mkdir -p /data /app/config
-COPY config/config.yaml /app/config/config.yaml
 
 EXPOSE 5000
 
