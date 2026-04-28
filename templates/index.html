@@ -211,23 +211,16 @@ async function triggerScan(btn) {
         const response = await fetch('/api/settings/scan', { method: 'POST' });
         const data = await response.json();
 
-        let resultHtml = `<p>处理文件数: ${data.processed}</p>`;
-        resultHtml += `<p>创建硬链接数: ${data.created}</p>`;
-        if (data.errors.length > 0) {
-            resultHtml += `<p class="text-danger">错误:</p><ul>`;
-            data.errors.forEach(err => {
-                resultHtml += `<li><small>${escapeHtml(err)}</small></li>`;
-            });
-            resultHtml += `</ul>`;
+        if (data.success) {
+            showToast(data.message || '扫描已在后台启动', 'success');
+        } else {
+            showToast(data.message || '扫描启动失败', 'danger');
         }
-
-        document.getElementById('scanResultBody').innerHTML = resultHtml;
-        new bootstrap.Modal(document.getElementById('scanResultModal')).show();
 
         loadStats();
     } catch (error) {
         console.error('扫描失败:', error);
-        alert('扫描失败: ' + error.message);
+        showToast('扫描失败: ' + error.message, 'danger');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-search"></i> 手动扫描';

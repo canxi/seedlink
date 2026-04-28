@@ -4,7 +4,9 @@ from typing import Any, Dict, List
 try:
     from dotenv import load_dotenv
     # 本地开发加载 .env.local，Docker 环境由 env_file 加载
-    load_dotenv('.env.local', override=False)
+    # override=True 确保 .env.local 中的值能覆盖系统环境变量
+    env_local = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env.local')
+    load_dotenv(env_local, override=True)
 except ImportError:
     pass
 

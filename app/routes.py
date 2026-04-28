@@ -64,14 +64,22 @@ def update_settings():
 
 @bp.route('/api/settings/scan', methods=['POST'])
 def trigger_scan():
-    scanner = ScannerService()
-    processed, created, errors = scanner.scan_and_create_hardlinks()
+    import threading
+    from app import create_app
+
+    def run_scan():
+        app = create_app()
+        with app.app_context():
+            scanner = ScannerService()
+            scanner.scan_and_create_hardlinks()
+
+    thread = threading.Thread(target=run_scan)
+    thread.daemon = True
+    thread.start()
 
     return jsonify({
         'success': True,
-        'processed': processed,
-        'created': created,
-        'errors': errors
+        'message': '扫描已在后台启动'
     })
 
 
