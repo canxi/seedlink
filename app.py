@@ -4,15 +4,14 @@ PT 视频硬链接管理器 - 主入口文件
 
 import os
 import atexit
+from dotenv import load_dotenv
+
+# 加载 .env.local 文件
+load_dotenv('.env.local')
 
 from app import create_app
 from app.services.watcher import get_watcher
 from app.services.hardlink import HardLinkService
-
-# 确保数据库目录存在
-db_dir = '/data'
-if not os.path.exists(db_dir):
-    os.makedirs(db_dir, exist_ok=True)
 
 # 创建 Flask 应用实例
 app = create_app()

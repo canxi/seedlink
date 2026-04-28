@@ -7,10 +7,11 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./config:/app/config
       - ./data:/app/data
       - /downloads:/downloads:ro
       - /media:/media
+    env_file:
+      - .env.docker
     environment:
       - TZ=Asia/Shanghai
     restart: unless-stopped

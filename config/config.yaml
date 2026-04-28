@@ -1,17 +1,16 @@
 app:
-  source_folder: /downloads
-  target_folder: /media
+  debug: false
   min_duration: 600
   scan_interval: 60
+  source_folder: D:/temp/seedlink/downloads
+  target_folder: D:/temp/seedlink/media
   video_extensions:
-    - .mkv
-    - .mp4
-    - .avi
-    - .ts
-    - .mov
-    - .wmv
-    - .flv
-  debug: false
-
+  - .mkv
+  - .mp4
+  - .avi
+  - .ts
+  - .mov
+  - .wmv
+  - .flv
 database:
-  uri: sqlite:////data/hardlinks.db
+  uri: sqlite:///D:/temp/seedlink/data/hardlinks.db

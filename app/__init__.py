@@ -14,16 +14,20 @@ def create_app():
 
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'pt-hardlink-manager-secret-key')
 
-    # 使用 /app/data 目录存储数据库，避免被 volume mount 覆盖
-    db_path = '/app/data/hardlinks.db'
-    db_dir = os.path.dirname(db_path)
-    if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
-    if not os.path.exists(db_path):
-        open(db_path, 'a').close()
+    # 使用配置中的数据库路径
+    db_uri = config.database_uri
+    # 确保数据库目录存在
+    if db_uri.startswith('sqlite:///'):
+        db_path = db_uri.replace('sqlite:///', '')
+        if not os.path.isabs(db_path):
+            db_path = os.path.join(base_dir, db_path)
+        db_dir = os.path.dirname(db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        if not os.path.exists(db_path):
+            open(db_path, 'a').close()
 
-    # 更新配置中的数据库路径
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////app/data/hardlinks.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = config.database_uri
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     logging.basicConfig(

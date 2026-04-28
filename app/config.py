@@ -32,15 +32,15 @@ class Config:
     def _default_config(self) -> Dict[str, Any]:
         return {
             'app': {
-                'source_folder': '/downloads',
-                'target_folder': '/media',
-                'min_duration': 600,
-                'scan_interval': 60,
+                'source_folder': os.environ.get('SOURCE_FOLDER', '/downloads'),
+                'target_folder': os.environ.get('TARGET_FOLDER', '/media'),
+                'min_duration': int(os.environ.get('MIN_DURATION', 600)),
+                'scan_interval': int(os.environ.get('SCAN_INTERVAL', 60)),
                 'video_extensions': ['.mkv', '.mp4', '.avi', '.ts', '.mov', '.wmv', '.flv'],
-                'debug': False
+                'debug': os.environ.get('DEBUG', 'false').lower() == 'true'
             },
             'database': {
-                'uri': 'sqlite:///data/hardlinks.db'
+                'uri': os.environ.get('DATABASE_URI', 'sqlite:///data/hardlinks.db')
             }
         }
 
