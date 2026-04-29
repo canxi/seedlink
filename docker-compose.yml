@@ -7,7 +7,6 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./.env.docker:/app/config/.env
       - ./data:/app/data
       - /downloads:/downloads:ro
       - /media:/media

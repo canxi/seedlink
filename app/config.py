@@ -24,10 +24,10 @@ class Config:
         return cls._instance
 
     def _env_file_path(self) -> str:
-        # Docker 环境: /app/config/.env (config 目录存在说明是 Docker 环境)
+        # Docker 环境: /app/data/.env (通过 docker-compose 的 volumes ./data:/app/data 映射)
         # 本地开发: .env.local
-        if os.path.exists('/app/config'):
-            return '/app/config/.env'
+        if os.path.exists('/app/data'):
+            return '/app/data/.env'
         return '.env.local'
 
     def _load_config(self):
@@ -42,7 +42,7 @@ class Config:
                 'debug': os.environ.get('DEBUG', 'false').lower() == 'true'
             },
             'database': {
-                'uri': os.environ.get('DATABASE_URI', 'sqlite:///data/hardlinks.db')
+                'uri': os.environ.get('DATABASE_URI', 'sqlite:////app/data/hardlinks.db')
             }
         }
 
@@ -134,7 +134,7 @@ class Config:
 
     @property
     def database_uri(self) -> str:
-        return self.get('database.uri', 'sqlite:///data/hardlinks.db')
+        return self.get('database.uri', 'sqlite:////app/data/hardlinks.db')
 
 
 config = Config()
