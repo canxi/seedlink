@@ -8,6 +8,7 @@ from typing import List, Tuple
 from app.config import config
 from app.utils.video import get_video_duration, get_video_info
 from app.services.hardlink import HardLinkService
+from app.services.duplicate_filter import DuplicateFilterService
 
 
 logger = logging.getLogger(__name__)
@@ -95,13 +96,24 @@ class ScannerService:
                     continue
 
                 file_size = os.path.getsize(source_path)
+
+                # 检查是否为重复文件（通过 MD5 过滤），并获取当前文件的 MD5
+                is_duplicate, duplicate_path, file_md5 = DuplicateFilterService.check_duplicate_by_md5(
+                    source_path, file_size
+                )
+                if is_duplicate:
+                    logger.info(f"跳过（重复文件）: {source_path} 与 {duplicate_path}")
+                    skipped.append(f"重复文件: {source_path} (与 {duplicate_path} 相同)")
+                    continue
+
                 target_path = self.get_target_path(source_path)
 
                 success, message = HardLinkService.create_hardlink(
                     source_path=source_path,
                     target_path=target_path,
                     duration=duration,
-                    file_size=file_size
+                    file_size=file_size,
+                    md5=file_md5
                 )
 
                 if success:

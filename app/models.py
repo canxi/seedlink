@@ -18,6 +18,7 @@
         - link_path: 硬链接路径
         - file_size: 文件大小
         - duration: 视频时长
+        - md5: 文件 MD5 哈希值
         - created_at: 创建时间
         - is_active: 是否有效（删除时标记为 False）
 
@@ -56,6 +57,7 @@ class HardLink(db.Model):
     link_path = db.Column(db.String(512), nullable=False, index=True)  # 硬链接路径
     file_size = db.Column(db.BigInteger, default=0)  # 文件大小（字节）
     duration = db.Column(db.Float, default=0.0)  # 视频时长（秒）
+    md5 = db.Column(db.String(32), nullable=True, index=True)  # 文件 MD5 哈希值
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # 创建时间
     is_active = db.Column(db.Boolean, default=True)  # 是否有效
 
@@ -72,6 +74,7 @@ class HardLink(db.Model):
             'link_path': self.link_path,
             'file_size': self.file_size,
             'duration': self.duration,
+            'md5': self.md5,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'is_active': self.is_active
         }

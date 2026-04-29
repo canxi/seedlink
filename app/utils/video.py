@@ -3,12 +3,16 @@
 """
 
 import os
+import hashlib
 import subprocess
 import json
 import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# MD5 chunk size: 8MB - good balance for memory and progress
+MD5_CHUNK_SIZE = 8 * 1024 * 1024
 
 
 def get_video_duration(file_path: str) -> Optional[float]:
@@ -104,3 +108,22 @@ def format_size(bytes_size: int) -> str:
         unit_index += 1
 
     return f"{size:.2f} {units[unit_index]}"
+
+
+def calculate_md5(file_path: str, chunk_size: int = MD5_CHUNK_SIZE) -> Optional[str]:
+    """计算文件的 MD5 值（分块读取，适合大文件）"""
+    if not os.path.exists(file_path):
+        return None
+
+    md5_hash = hashlib.md5()
+    try:
+        with open(file_path, 'rb') as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                md5_hash.update(chunk)
+        return md5_hash.hexdigest()
+    except (IOError, OSError) as e:
+        logger.warning(f"计算 MD5 失败 {file_path}: {e}")
+        return None

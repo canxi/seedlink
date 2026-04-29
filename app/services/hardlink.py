@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class HardLinkService:
 
     @staticmethod
-    def create_hardlink(source_path: str, target_path: str, duration: float = 0, file_size: int = 0) -> Tuple[bool, str]:
+    def create_hardlink(source_path: str, target_path: str, duration: float = 0, file_size: int = 0, md5: str = None) -> Tuple[bool, str]:
         try:
             src = Path(source_path)
             dest = Path(target_path)
@@ -50,6 +50,7 @@ class HardLinkService:
                 link_path=target_path,
                 file_size=file_size or src.stat().st_size,
                 duration=duration,
+                md5=md5,
                 is_active=True
             )
             db.session.add(link_record)
