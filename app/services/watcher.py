@@ -158,6 +158,8 @@ class WatcherService:
             logger.warning("监控服务已在运行")
             return
 
+        # 启动前重新刷新配置，确保使用最新配置
+        self.scanner.refresh_config()
         source_folder = self.scanner.source_folder
 
         if not os.path.exists(source_folder):
