@@ -4,10 +4,10 @@
 功能说明：
     使用 MD5 哈希检测重复视频文件，避免为重复文件创建硬链接
 
-分层过滤策略：
-    1. 按文件大小快速预筛选（相同大小才可能重复）
-    2. 对相同大小的文件计算 MD5 确认
-    3. 检查数据库中是否已存在相同 MD5 的文件
+工作流程：
+    1. 每次创建硬链接时计算并存储 MD5
+    2. 扫描新文件时，先计算 MD5，再查询数据库是否有相同 MD5 的记录
+    3. 如果有相同 MD5 的记录，说明是重复文件，跳过
 """
 
 import os
@@ -23,26 +23,11 @@ logger = logging.getLogger(__name__)
 class DuplicateFilterService:
 
     @staticmethod
-    def get_md5_from_db(md5: str) -> Optional[HardLink]:
-        """查询数据库中是否存在相同 MD5 的活跃硬链接"""
-        return HardLink.query.filter_by(md5=md5, is_active=True).first()
-
-    @staticmethod
-    def get_by_size(file_size: int) -> List[HardLink]:
-        """查询数据库中相同大小的活跃硬链接"""
-        return HardLink.query.filter_by(
-            file_size=file_size,
-            is_active=True
-        ).all()
-
-    @staticmethod
     def check_duplicate_by_md5(file_path: str, file_size: int) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        检查文件是否重复
+        检查文件是否为重复文件
 
-        使用分层策略：
-        1. 先检查数据库中是否有相同大小的文件
-        2. 如果有，再计算 MD5 进行确认
+        每次都计算 MD5 并查询数据库，确保新添加的文件也能被记录
 
         Args:
             file_path: 待检查的文件路径
@@ -54,21 +39,34 @@ class DuplicateFilterService:
             - duplicate_path: 重复文件的 source_path（如果有）
             - md5: 计算出的 MD5 值
         """
-        same_size_links = DuplicateFilterService.get_by_size(file_size)
-        if not same_size_links:
-            return False, None, None
-
         md5 = calculate_md5(file_path)
         if not md5:
             logger.warning(f"无法计算 MD5: {file_path}")
             return False, None, None
 
-        for link in same_size_links:
-            if link.md5 and link.md5 == md5:
-                logger.info(f"发现重复文件: {file_path} <-> {link.source_path} (MD5: {md5})")
-                return True, link.source_path, md5
+        existing_link = HardLink.query.filter(
+            HardLink.md5 == md5,
+            HardLink.is_active == True
+        ).first()
+
+        if existing_link:
+            logger.info(f"发现重复文件: {file_path} <-> {existing_link.source_path} (MD5: {md5})")
+            return True, existing_link.source_path, md5
 
         return False, None, md5
+
+    @staticmethod
+    def get_by_md5(md5: str) -> Optional[HardLink]:
+        """查询数据库中是否存在相同 MD5 的活跃硬链接"""
+        return HardLink.query.filter_by(md5=md5, is_active=True).first()
+
+    @staticmethod
+    def get_by_size(file_size: int) -> List[HardLink]:
+        """查询数据库中相同大小的活跃硬链接"""
+        return HardLink.query.filter_by(
+            file_size=file_size,
+            is_active=True
+        ).all()
 
     @staticmethod
     def find_duplicates_in_folder(folder: str, video_extensions: List[str]) -> Dict[str, List[str]]:
