@@ -15,32 +15,59 @@ PT 视频硬链接管理器 - 自动为符合条件的视频创建硬链接
 
 ### 使用 Docker Compose（推荐）
 
-1. 克隆仓库
-2. 创建 `.env.local` 文件配置环境变量（或使用默认配置）
-3. 启动服务
-
 ```bash
-# 克隆
-git clone https://github.com/canxi/seedlink.git
-cd seedlink
 
-# 启动
+services:
+  app:
+    image: ghcr.io/canxi/seedlink:latest
+    container_name: seedlink
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - /downloads:/downloads
+      - /media:/media
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+# 创建数据目录
+mkdir -p data
+
+# 启动服务（首次会自动生成配置文件）
 docker-compose up -d
 
 # 访问
 open http://localhost:5000
 ```
 
+首次启动后，访问 Web 界面修改源文件夹和目标文件夹路径，配置会自动保存到 `./data/.env` 文件中。
+
 ## 配置说明
 
-所有配置通过环境变量管理，无需修改代码。
+### 通过 Web 界面配置（推荐）
+
+启动服务后，访问 http://localhost:5000 ，在设置页面修改配置后保存即可。
+
+### 手动配置
+
+配置文件位于 `./data/.env`（Docker 环境）或 `.env.local`（本地开发）：
+
+```bash
+SOURCE_FOLDER=/downloads
+TARGET_FOLDER=/media
+MIN_DURATION=600
+SCAN_INTERVAL=60
+VIDEO_EXTENSIONS=.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv
+DEBUG=false
+```
 
 | 环境变量 | 默认值 | 说明 |
 |---------|--------|------|
 | `SOURCE_FOLDER` | `/downloads` | 源文件夹（PT下载目录） |
 | `TARGET_FOLDER` | `/media` | 目标文件夹（媒体库目录） |
-| `MIN_DURATION` | `600` | 最小视频时长（秒） |
-| `DATABASE_URI` | `sqlite:///data/hardlinks.db` | 数据库路径 |
+| `MIN_DURATION` | `600` | 最小视频时长（秒），过滤短视频 |
+| `SCAN_INTERVAL` | `60` | 扫描间隔（秒） |
+| `VIDEO_EXTENSIONS` | `.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv` | 支持的视频格式 |
 | `DEBUG` | `false` | 调试模式 |
 
 ### 本地开发
@@ -57,22 +84,12 @@ cp .env.example .env.local
 python app.py
 ```
 
-### Docker 环境变量
-
-使用 `.env.docker` 文件：
-
-```bash
-SOURCE_FOLDER=/downloads
-TARGET_FOLDER=/media
-DATABASE_URI=sqlite:////app/data/hardlinks.db
-```
-
 ## 目录说明
 
 | 宿主机目录 | 容器内目录 | 说明 |
 |-----------|-----------|------|
-| `./data` | `/app/data` | SQLite 数据库文件 |
-| `/downloads` | `/downloads:ro` | PT 下载目录（只读） |
+| `./data` | `/app/data` | SQLite 数据库和配置文件 |
+| `/downloads` | `/downloads` | PT 下载目录 |
 | `/media` | `/media` | 媒体库目录 |
 
 ## 技术栈
