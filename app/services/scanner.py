@@ -4,6 +4,8 @@
 
 import os
 import logging
+import time
+import threading
 from typing import List, Tuple
 from app.config import config
 from app.utils.video import get_video_duration, get_video_info
@@ -16,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 class ScannerService:
 
+    _scan_lock = threading.Lock()  # 全局扫描锁，跨实例共享，防止调度与手动扫描并发
+
     def __init__(self):
         # 每次创建时重新加载配置
         config.reload()
@@ -23,6 +27,7 @@ class ScannerService:
         self.target_folder = config.target_folder
         self.min_duration = config.min_duration
         self.video_extensions = config.video_extensions
+        self.scan_delay = config.scan_delay
 
     def refresh_config(self):
         config.reload()
@@ -30,6 +35,12 @@ class ScannerService:
         self.target_folder = config.target_folder
         self.min_duration = config.min_duration
         self.video_extensions = config.video_extensions
+        self.scan_delay = config.scan_delay
+
+    @classmethod
+    def is_scanning(cls) -> bool:
+        """是否有扫描任务正在运行（供路由层查询）"""
+        return cls._scan_lock.locked()
 
     def is_video_file(self, filename: str) -> bool:
         ext = os.path.splitext(filename)[1].lower()
@@ -64,68 +75,79 @@ class ScannerService:
     def scan_and_create_hardlinks(self) -> Tuple[int, int, List[str], List[str]]:
         self.refresh_config()
 
-        processed = 0
-        created = 0
-        errors = []
-        skipped = []
+        # 全局锁：防止调度扫描与手动扫描并发，获取不到则跳过
+        if not self._scan_lock.acquire(blocking=False):
+            logger.info('扫描任务已在运行，跳过本次触发')
+            return 0, 0, [], ['已有扫描任务在运行，跳过']
 
-        if not os.path.exists(self.source_folder):
-            logger.warning(f"源文件夹不存在: {self.source_folder}")
-            return processed, created, ["源文件夹不存在"], skipped
+        try:
+            processed = 0
+            created = 0
+            errors = []
+            skipped = []
 
-        video_files = self.get_video_files(self.source_folder)
-        logger.info(f"发现 {len(video_files)} 个视频文件")
+            if not os.path.exists(self.source_folder):
+                logger.warning(f'源文件夹不存在: {self.source_folder}')
+                return processed, created, ['源文件夹不存在'], skipped
 
-        for source_path in video_files:
-            try:
-                existing_link = HardLinkService.get_link_by_source(source_path)
-                if existing_link:
-                    logger.info(f"跳过（已存在硬链接）: {source_path}")
-                    skipped.append(f"已存在硬链接: {source_path}")
-                    continue
+            video_files = self.get_video_files(self.source_folder)
+            logger.info(f'发现 {len(video_files)} 个视频文件')
 
-                duration = get_video_duration(source_path)
-                if duration is None:
-                    logger.warning(f"跳过（无法获取时长）: {source_path}")
-                    errors.append(f"无法获取时长: {source_path}")
-                    continue
+            for source_path in video_files:
+                try:
+                    existing_link = HardLinkService.get_link_by_source(source_path)
+                    if existing_link:
+                        logger.info(f'跳过(已存在硬链接): {source_path}')
+                        skipped.append(f'已存在硬链接: {source_path}')
+                        continue
 
-                if duration < self.min_duration:
-                    logger.info(f"跳过（时长不足 {duration}s < {self.min_duration}s）: {source_path}")
-                    skipped.append(f"视频时长 {duration}s 小于阈值 {self.min_duration}s: {source_path}")
-                    continue
+                    duration = get_video_duration(source_path)
+                    if duration is None:
+                        logger.warning(f'跳过(无法获取时长): {source_path}')
+                        errors.append(f'无法获取时长: {source_path}')
+                        continue
 
-                file_size = os.path.getsize(source_path)
+                    if duration < self.min_duration:
+                        logger.info(f'跳过(时长不足 {duration}s < {self.min_duration}s): {source_path}')
+                        skipped.append(f'视频时长 {duration}s 小于阈值 {self.min_duration}s: {source_path}')
+                        continue
 
-                # 检查是否为重复文件（通过 MD5 过滤），并获取当前文件的 MD5
-                is_duplicate, duplicate_path, file_md5 = DuplicateFilterService.check_duplicate_by_md5(
-                    source_path, file_size
-                )
-                if is_duplicate:
-                    logger.info(f"跳过（重复文件）: {source_path} 与 {duplicate_path}")
-                    skipped.append(f"重复文件: {source_path} (与 {duplicate_path} 相同)")
-                    continue
+                    file_size = os.path.getsize(source_path)
 
-                target_path = self.get_target_path(source_path)
+                    is_duplicate, duplicate_path, file_md5 = DuplicateFilterService.check_duplicate_by_md5(
+                        source_path, file_size
+                    )
+                    # MD5 全文件读取后休眠，缓解磁盘 I/O 压力（可配置 SCAN_DELAY）
+                    if self.scan_delay > 0:
+                        time.sleep(self.scan_delay)
 
-                success, message = HardLinkService.create_hardlink(
-                    source_path=source_path,
-                    target_path=target_path,
-                    duration=duration,
-                    file_size=file_size,
-                    md5=file_md5
-                )
+                    if is_duplicate:
+                        logger.info(f'跳过(重复文件): {source_path} 与 {duplicate_path}')
+                        skipped.append(f'重复文件: {source_path} (与 {duplicate_path} 相同)')
+                        continue
 
-                if success:
-                    created += 1
-                else:
-                    errors.append(f"{source_path}: {message}")
+                    target_path = self.get_target_path(source_path)
 
-                processed += 1
+                    success, message = HardLinkService.create_hardlink(
+                        source_path=source_path,
+                        target_path=target_path,
+                        duration=duration,
+                        file_size=file_size,
+                        md5=file_md5
+                    )
 
-            except Exception as e:
-                logger.error(f"处理文件失败 {source_path}: {e}")
-                errors.append(f"{source_path}: {str(e)}")
+                    if success:
+                        created += 1
+                    else:
+                        errors.append(f'{source_path}: {message}')
 
-        logger.info(f"扫描完成: 处理 {processed} 个文件，创建 {created} 个硬链接，跳过 {len(skipped)} 个")
-        return processed, created, errors, skipped
+                    processed += 1
+
+                except Exception as e:
+                    logger.error(f'处理文件失败 {source_path}: {e}')
+                    errors.append(f'{source_path}: {str(e)}')
+
+            logger.info(f'扫描完成: 处理 {processed} 个文件，创建 {created} 个硬链接，跳过 {len(skipped)} 个')
+            return processed, created, errors, skipped
+        finally:
+            self._scan_lock.release()

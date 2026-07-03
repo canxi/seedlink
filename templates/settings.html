@@ -39,8 +39,14 @@
 
                     <div class="mb-3">
                         <label for="scanInterval" class="form-label">扫描间隔 (秒)</label>
-                        <input type="number" class="form-control" id="scanInterval" name="scan_interval" min="10" max="3600" value="60">
+                        <input type="number" class="form-control" id="scanInterval" name="scan_interval" min="10" max="86400" value="3600">
                         <small class="text-muted">自动扫描的间隔时间</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="scanDelay" class="form-label">扫描休眠时间 (秒)</label>
+                        <input type="number" class="form-control" id="scanDelay" name="scan_delay" min="0" max="10" step="0.5" value="1">
+                        <small class="text-muted">每个文件 MD5 计算后的休眠时间，缓解磁盘 I/O 压力（0 表示不休眠）</small>
                     </div>
 
                     <div class="mb-3">
@@ -180,6 +186,7 @@ async function loadSettings() {
         document.getElementById('minDuration').value = data.min_duration;
         minDurationValue.textContent = data.min_duration;
         document.getElementById('scanInterval').value = data.scan_interval;
+        document.getElementById('scanDelay').value = data.scan_delay;
         document.getElementById('cleanupCron').value = data.cleanup_cron;
 
         document.querySelectorAll('.extension-checkbox').forEach(cb => {
@@ -208,6 +215,7 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
         target_folder: document.getElementById('targetFolder').value,
         min_duration: parseInt(document.getElementById('minDuration').value),
         scan_interval: parseInt(document.getElementById('scanInterval').value),
+        scan_delay: parseFloat(document.getElementById('scanDelay').value),
         cleanup_cron: document.getElementById('cleanupCron').value,
         video_extensions: extensions
     };

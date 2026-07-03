@@ -48,6 +48,7 @@ def get_settings():
         'target_folder': config.target_folder,
         'min_duration': config.min_duration,
         'scan_interval': config.scan_interval,
+        'scan_delay': config.scan_delay,
         'cleanup_cron': config.cleanup_cron,
         'video_extensions': config.video_extensions
     }
@@ -66,6 +67,8 @@ def update_settings():
         config.set('app.min_duration', int(data['min_duration']))
     if 'scan_interval' in data:
         config.set('app.scan_interval', int(data['scan_interval']))
+    if 'scan_delay' in data:
+        config.set('app.scan_delay', float(data['scan_delay']))
     if 'video_extensions' in data:
         config.set('app.video_extensions', data['video_extensions'])
     if 'cleanup_cron' in data:
@@ -128,6 +131,9 @@ def browse_dirs():
 
 @bp.route('/api/settings/scan', methods=['POST'])
 def trigger_scan():
+    if ScannerService.is_scanning():
+        return jsonify({'success': False, 'message': '扫描任务已在运行，请稍后再试'})
+
     import threading
     from app import create_app
 

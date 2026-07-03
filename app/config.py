@@ -43,6 +43,7 @@ class Config:
             f"TARGET_FOLDER={self._config['app']['target_folder']}",
             f"MIN_DURATION={self._config['app']['min_duration']}",
             f"SCAN_INTERVAL={self._config['app']['scan_interval']}",
+            f"SCAN_DELAY={self._config['app']['scan_delay']}",
             f"CLEANUP_CRON={self._config['app']['cleanup_cron']}",
             f"VIDEO_EXTENSIONS={','.join(self._config['app']['video_extensions'])}",
             f"DATABASE_URI={self._config['database']['uri']}",
@@ -61,7 +62,8 @@ class Config:
                 'source_folder': os.environ.get('SOURCE_FOLDER', '/downloads'),
                 'target_folder': os.environ.get('TARGET_FOLDER', '/media'),
                 'min_duration': int(os.environ.get('MIN_DURATION', 600)),
-                'scan_interval': int(os.environ.get('SCAN_INTERVAL', 60)),
+                'scan_interval': int(os.environ.get('SCAN_INTERVAL', 3600)),
+                'scan_delay': float(os.environ.get('SCAN_DELAY', 1.0)),
                 'cleanup_cron': os.environ.get('CLEANUP_CRON', '0 3 * * *'),
                 'video_extensions': os.environ.get('VIDEO_EXTENSIONS', '.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv').split(','),
                 'debug': os.environ.get('DEBUG', 'false').lower() == 'true'
@@ -142,7 +144,11 @@ class Config:
 
     @property
     def scan_interval(self) -> int:
-        return self.get('app.scan_interval', 60)
+        return self.get('app.scan_interval', 3600)
+
+    @property
+    def scan_delay(self) -> float:
+        return self.get('app.scan_delay', 1.0)
 
     @property
     def cleanup_cron(self) -> str:
