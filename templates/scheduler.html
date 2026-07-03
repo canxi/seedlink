@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="card-title mb-1"><i class="bi bi-clock-history"></i> 定时任务调度</h5>
+                    <small class="text-muted" id="schedulerHint">调度服务状态加载中...</small>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm me-2" onclick="loadSchedulerPage()">
+                        <i class="bi bi-arrow-clockwise"></i> 刷新
+                    </button>
+                    <button class="btn btn-sm" id="btnSchedulerToggle" onclick="toggleSchedulerPage()">
+                        <i class="bi bi-play"></i> 启动调度
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">任务列表</h5>
+                <small class="text-muted">每 3 秒自动刷新</small>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>任务</th>
+                            <th>触发规则</th>
+                            <th>状态</th>
+                            <th>上次运行</th>
+                            <th>耗时</th>
+                            <th>下次运行</th>
+                            <th>运行/错过</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobsTable">
+                        <tr><td colspan="7" class="text-center text-muted">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3" id="errorRow" style="display:none;">
+    <div class="col-md-12">
+        <div class="card border-danger">
+            <div class="card-header text-danger"><i class="bi bi-exclamation-triangle"></i> 最近错误详情</div>
+            <div class="card-body"><pre id="errorDetail" class="mb-0 small"></pre></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let _refreshTimer = null;
+
+function renderStatusBadge(running, lastResult) {
+    if (running) {
+        return '<span class="badge bg-primary"><span class="spinner-border spinner-border-sm me-1"></span>运行中</span>';
+    }
+    if (lastResult === 'failed') return '<span class="badge bg-danger">错误</span>';
+    if (lastResult === 'missed') return '<span class="badge bg-warning text-dark">已错过</span>';
+    if (lastResult === 'success') return '<span class="badge bg-secondary">等待中</span>';
+    return '<span class="badge bg-light text-dark border">待触发</span>';
+}
+
+function formatDuration(sec) {
+    if (sec === null || sec === undefined) return '-';
+    if (sec < 60) return sec.toFixed(2) + ' 秒';
+    const m = Math.floor(sec / 60);
+    const s = (sec % 60).toFixed(0);
+    return m + ' 分 ' + s + ' 秒';
+}
+
+function formatTime(iso) {
+    if (!iso) return '-';
+    return formatDate(iso);
+}
+
+async function loadSchedulerPage() {
+    try {
+        const response = await fetch('/api/scheduler/status');
+        const data = await response.json();
+
+        const hint = document.getElementById('schedulerHint');
+        const btn = document.getElementById('btnSchedulerToggle');
+        if (data.running) {
+            hint.textContent = '调度服务运行中,共 ' + data.jobs.length + ' 个任务';
+            hint.className = 'text-success';
+            btn.className = 'btn btn-sm btn-danger';
+            btn.innerHTML = '<i class="bi bi-stop"></i> 停止调度';
+        } else {
+            hint.textContent = '调度服务已停止';
+            hint.className = 'text-muted';
+            btn.className = 'btn btn-sm btn-success';
+            btn.innerHTML = '<i class="bi bi-play"></i> 启动调度';
+        }
+
+        const tbody = document.getElementById('jobsTable');
+        if (!data.jobs || data.jobs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无任务</td></tr>';
+        } else {
+            tbody.innerHTML = data.jobs.map(j => {
+                const lastErr = (j.last_run_result === 'failed') ? j.last_run_error : null;
+                return `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(j.name)}</strong><br>
+                        <small class="text-muted">${escapeHtml(j.id)}</small>
+                    </td>
+                    <td><small>${escapeHtml(j.trigger)}</small></td>
+                    <td>${renderStatusBadge(j.running, j.last_run_result)}</td>
+                    <td><small>${formatTime(j.last_run_time)}</small></td>
+                    <td><small>${formatDuration(j.last_run_duration)}</small></td>
+                    <td><small>${formatTime(j.next_run_time)}</small></td>
+                    <td>
+                        <span class="badge bg-success-subtle text-success-emphasis">${j.run_count}</span>
+                        <small class="text-muted">/</small>
+                        <span class="badge bg-warning-subtle text-warning-emphasis">${j.missed_count}</span>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            // 显示最近错误
+            const failedJob = data.jobs.find(j => j.last_run_result === 'failed' && j.last_run_error);
+            const errRow = document.getElementById('errorRow');
+            const errDetail = document.getElementById('errorDetail');
+            if (failedJob) {
+                errRow.style.display = '';
+                errDetail.textContent = '[' + failedJob.id + '] ' + failedJob.last_run_error;
+            } else {
+                errRow.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('加载调度状态失败:', error);
+        showToast('加载调度状态失败: ' + error.message, 'danger');
+    }
+}
+
+async function toggleSchedulerPage() {
+    try {
+        const statusResponse = await fetch('/api/scheduler/status');
+        const statusData = await statusResponse.json();
+        let response;
+        if (statusData.running) {
+            response = await fetch('/api/scheduler/stop', { method: 'POST' });
+        } else {
+            response = await fetch('/api/scheduler/start', { method: 'POST' });
+        }
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message || '操作失败', 'danger');
+        } else {
+            showToast(statusData.running ? '调度已停止' : '调度已启动', 'success');
+        }
+        loadSchedulerPage();
+    } catch (error) {
+        console.error('切换调度状态失败:', error);
+        showToast('切换调度状态失败', 'danger');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadSchedulerPage();
+    _refreshTimer = setInterval(loadSchedulerPage, 3000);
+});
+</script>
+{% endblock %}

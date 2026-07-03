@@ -1,14 +1,18 @@
 import os
+import logging
 from flask import Blueprint, render_template, request, jsonify
 from app.models import db, HardLink
 from app.config import config
 from app.services.hardlink import HardLinkService
 from app.services.scanner import ScannerService
 from app.services.watcher import get_watcher
+from app.services.scheduler import get_scheduler
 from app.utils.video import format_duration, format_size
 
 
 bp = Blueprint('main', __name__)
+
+logger = logging.getLogger(__name__)
 
 
 @bp.route('/logs')
@@ -26,6 +30,11 @@ def settings():
     return render_template('settings.html')
 
 
+@bp.route('/scheduler')
+def scheduler():
+    return render_template('scheduler.html')
+
+
 @bp.route('/links')
 def links():
     return render_template('links.html')
@@ -38,6 +47,7 @@ def get_settings():
         'target_folder': config.target_folder,
         'min_duration': config.min_duration,
         'scan_interval': config.scan_interval,
+        'cleanup_cron': config.cleanup_cron,
         'video_extensions': config.video_extensions
     }
     return jsonify(settings_data)
@@ -57,12 +67,18 @@ def update_settings():
         config.set('app.scan_interval', int(data['scan_interval']))
     if 'video_extensions' in data:
         config.set('app.video_extensions', data['video_extensions'])
+    if 'cleanup_cron' in data:
+        config.set('app.cleanup_cron', data['cleanup_cron'])
 
     config.save()
 
     watcher = get_watcher()
     if watcher.is_running():
         watcher.restart()
+
+    scheduler = get_scheduler()
+    if scheduler.is_running():
+        scheduler.restart()
 
     return jsonify({'success': True, 'message': '设置已保存'})
 
@@ -85,6 +101,27 @@ def trigger_scan():
     return jsonify({
         'success': True,
         'message': '扫描已在后台启动'
+    })
+
+
+@bp.route('/api/settings/cleanup-deleted', methods=['POST'])
+def trigger_cleanup_deleted():
+    import threading
+    from app import create_app
+
+    def run_cleanup():
+        app = create_app()
+        with app.app_context():
+            checked, cleaned, errors = HardLinkService.cleanup_deleted_sources()
+            logger.info(f"清理已删除源文件任务完成: 检查 {checked}, 清理 {cleaned}, 错误 {len(errors)}")
+
+    thread = threading.Thread(target=run_cleanup)
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({
+        'success': True,
+        'message': '清理已删除源文件任务已在后台启动'
     })
 
 
@@ -172,6 +209,32 @@ def watcher_stop():
     if watcher.is_running():
         watcher.stop()
     return jsonify({'success': True, 'running': watcher.is_running()})
+
+
+@bp.route('/api/scheduler/status', methods=['GET'])
+def scheduler_status():
+    scheduler = get_scheduler()
+    return jsonify({
+        'running': scheduler.is_running(),
+        'jobs': scheduler.get_jobs()
+    })
+
+
+@bp.route('/api/scheduler/start', methods=['POST'])
+def scheduler_start():
+    scheduler = get_scheduler()
+    if scheduler.is_running():
+        return jsonify({'success': True, 'running': True, 'message': '调度已在运行'})
+    scheduler.start()
+    return jsonify({'success': True, 'running': scheduler.is_running()})
+
+
+@bp.route('/api/scheduler/stop', methods=['POST'])
+def scheduler_stop():
+    scheduler = get_scheduler()
+    if scheduler.is_running():
+        scheduler.stop()
+    return jsonify({'success': True, 'running': scheduler.is_running()})
 
 
 @bp.route('/api/logs', methods=['GET'])

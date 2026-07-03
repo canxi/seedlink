@@ -34,6 +34,12 @@
                     </div>
 
                     <div class="mb-3">
+                        <label for="cleanupCron" class="form-label">清理任务 Cron 表达式</label>
+                        <input type="text" class="form-control" id="cleanupCron" name="cleanup_cron" placeholder="0 3 * * *">
+                        <small class="text-muted">标准5段式 cron,默认 0 3 * * * (每天凌晨3点)</small>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">视频文件扩展名</label>
                         <div class="row" id="extensionsContainer">
                             <div class="col-md-3">
@@ -138,6 +144,7 @@ async function loadSettings() {
         document.getElementById('minDuration').value = data.min_duration;
         minDurationValue.textContent = data.min_duration;
         document.getElementById('scanInterval').value = data.scan_interval;
+        document.getElementById('cleanupCron').value = data.cleanup_cron;
 
         document.querySelectorAll('.extension-checkbox').forEach(cb => {
             cb.checked = data.video_extensions.includes(cb.value);
@@ -165,6 +172,7 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
         target_folder: document.getElementById('targetFolder').value,
         min_duration: parseInt(document.getElementById('minDuration').value),
         scan_interval: parseInt(document.getElementById('scanInterval').value),
+        cleanup_cron: document.getElementById('cleanupCron').value,
         video_extensions: extensions
     };
 

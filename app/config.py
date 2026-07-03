@@ -42,6 +42,7 @@ class Config:
             f"TARGET_FOLDER={self._config['app']['target_folder']}",
             f"MIN_DURATION={self._config['app']['min_duration']}",
             f"SCAN_INTERVAL={self._config['app']['scan_interval']}",
+            f"CLEANUP_CRON={self._config['app']['cleanup_cron']}",
             f"VIDEO_EXTENSIONS={','.join(self._config['app']['video_extensions'])}",
             f"DEBUG={'true' if self._config['app']['debug'] else 'false'}",
         ]
@@ -59,6 +60,7 @@ class Config:
                 'target_folder': os.environ.get('TARGET_FOLDER', '/media'),
                 'min_duration': int(os.environ.get('MIN_DURATION', 600)),
                 'scan_interval': int(os.environ.get('SCAN_INTERVAL', 60)),
+                'cleanup_cron': os.environ.get('CLEANUP_CRON', '0 3 * * *'),
                 'video_extensions': os.environ.get('VIDEO_EXTENSIONS', '.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv').split(','),
                 'debug': os.environ.get('DEBUG', 'false').lower() == 'true'
             },
@@ -139,6 +141,10 @@ class Config:
     @property
     def scan_interval(self) -> int:
         return self.get('app.scan_interval', 60)
+
+    @property
+    def cleanup_cron(self) -> str:
+        return self.get('app.cleanup_cron', '0 3 * * *')
 
     @property
     def video_extensions(self) -> List[str]:

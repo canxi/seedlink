@@ -5,7 +5,7 @@
 import os
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from app.models import db, HardLink
 from app.utils.video import get_video_duration, get_video_info
 
@@ -154,3 +154,37 @@ class HardLinkService:
 
         db.session.commit()
         return cleaned
+
+    @staticmethod
+    def cleanup_deleted_sources() -> Tuple[int, int, List[str]]:
+        """
+        扫描所有活跃的硬链接记录,清理源文件已被删除的记录:
+        - 若 source_path 不存在于磁盘,则删除对应的 link_path 硬链接文件
+        - 将这些记录标记为 is_active=False
+        这是 watcher.on_deleted() 反应式清理的补充安全网,用于处理
+        应用离线、watchdog 漏检或外部删除等情况。
+        Returns:
+            (checked, cleaned, errors): 检查总数,清理总数,错误信息列表
+        """
+        links = HardLink.query.filter_by(is_active=True).all()
+        checked = len(links)
+        cleaned = 0
+        errors = []
+
+        for link in links:
+            # 仅当源文件已不存在时才清理(源文件被删除的情况)
+            if not os.path.exists(link.source_path):
+                try:
+                    if os.path.exists(link.link_path):
+                        os.remove(link.link_path)
+                        logger.info(f"清理已删除源文件的硬链接: {link.link_path}")
+                    link.is_active = False
+                    cleaned += 1
+                    logger.info(f"标记非活跃(源文件已删除): {link.source_path}")
+                except Exception as e:
+                    errors.append(f"{link.link_path}: {str(e)}")
+                    logger.error(f"清理记录失败 {link.source_path}: {e}")
+
+        db.session.commit()
+        logger.info(f"源文件清理扫描完成: 检查 {checked} 条,清理 {cleaned} 条,错误 {len(errors)} 条")
+        return checked, cleaned, errors

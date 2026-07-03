@@ -12,6 +12,7 @@ load_dotenv('.env.local')
 from app import create_app
 from app.services.watcher import get_watcher
 from app.services.hardlink import HardLinkService
+from app.services.scheduler import get_scheduler
 
 # 创建 Flask 应用实例
 app = create_app()
@@ -23,6 +24,9 @@ watcher = get_watcher()
 def cleanup():
     if watcher.is_running():
         watcher.stop()
+    scheduler = get_scheduler()
+    if scheduler.is_running():
+        scheduler.stop()
 
 
 atexit.register(cleanup)
@@ -31,6 +35,8 @@ atexit.register(cleanup)
 if __name__ == '__main__':
     with app.app_context():
         HardLinkService.cleanup_invalid_links()
+        HardLinkService.cleanup_deleted_sources()
         watcher.start()
+        get_scheduler().start()
 
     app.run(host='0.0.0.0', port=5000, debug=False)

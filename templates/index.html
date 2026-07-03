@@ -62,8 +62,14 @@
                 <button class="btn btn-primary" id="btnScan" onclick="triggerScan(this)">
                     <i class="bi bi-search"></i> 手动扫描
                 </button>
+                <button class="btn btn-outline-danger" id="btnCleanup" onclick="triggerCleanup(this)">
+                    <i class="bi bi-trash"></i> 清理已删除源文件
+                </button>
                 <button class="btn btn-success" id="btnWatcherToggle" onclick="toggleWatcher()">
                     <i class="bi bi-play"></i> 启动监控
+                </button>
+                <button class="btn btn-outline-info" id="btnSchedulerToggle" onclick="toggleScheduler()">
+                    <i class="bi bi-clock-history"></i> 启动调度
                 </button>
                 <button class="btn btn-warning" onclick="location.href='/settings'">
                     <i class="bi bi-gear"></i> 配置设置
@@ -227,6 +233,82 @@ async function triggerScan(btn) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', loadStats);
+async function triggerCleanup(btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 清理中...';
+
+    try {
+        const response = await fetch('/api/settings/cleanup-deleted', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(data.message || '清理任务已在后台启动', 'success');
+        } else {
+            showToast(data.message || '清理任务启动失败', 'danger');
+        }
+
+        loadStats();
+    } catch (error) {
+        console.error('清理任务失败:', error);
+        showToast('清理任务失败: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-trash"></i> 清理已删除源文件';
+    }
+}
+
+async function loadSchedulerStatus() {
+    try {
+        const response = await fetch('/api/scheduler/status');
+        const data = await response.json();
+        updateSchedulerButton(data.running);
+    } catch (error) {
+        console.error('加载调度状态失败:', error);
+    }
+}
+
+function updateSchedulerButton(running) {
+    const btn = document.getElementById('btnSchedulerToggle');
+    if (running) {
+        btn.classList.remove('btn-outline-info');
+        btn.classList.add('btn-info', 'text-white');
+        btn.innerHTML = '<i class="bi bi-clock-history"></i> 停止调度';
+    } else {
+        btn.classList.remove('btn-info', 'text-white');
+        btn.classList.add('btn-outline-info');
+        btn.innerHTML = '<i class="bi bi-clock-history"></i> 启动调度';
+    }
+}
+
+async function toggleScheduler() {
+    try {
+        const statusResponse = await fetch('/api/scheduler/status');
+        const statusData = await statusResponse.json();
+
+        let response;
+        if (statusData.running) {
+            response = await fetch('/api/scheduler/stop', { method: 'POST' });
+        } else {
+            response = await fetch('/api/scheduler/start', { method: 'POST' });
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message || '操作失败', 'danger');
+        } else {
+            showToast(statusData.running ? '调度已停止' : '调度已启动', 'success');
+        }
+
+        loadSchedulerStatus();
+    } catch (error) {
+        console.error('切换调度状态失败:', error);
+        showToast('切换调度状态失败', 'danger');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadStats();
+    loadSchedulerStatus();
+});
 </script>
 {% endblock %}
