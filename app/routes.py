@@ -1,5 +1,6 @@
 import os
 import logging
+import string
 from flask import Blueprint, render_template, request, jsonify
 from app.models import db, HardLink
 from app.config import config
@@ -81,6 +82,48 @@ def update_settings():
         scheduler.restart()
 
     return jsonify({'success': True, 'message': '设置已保存'})
+
+
+@bp.route('/api/browse', methods=['GET'])
+def browse_dirs():
+    path = request.args.get('path', '')
+
+    if not path:
+        if os.name == 'nt':
+            drives = []
+            for letter in string.ascii_uppercase:
+                drive = letter + ':\\'
+                if os.path.exists(drive):
+                    drives.append({'name': letter + ':', 'path': drive})
+            return jsonify({'current': '', 'parent': None, 'dirs': drives, 'exists': True})
+        else:
+            path = '/'
+
+    path = os.path.abspath(path)
+
+    if not os.path.exists(path):
+        return jsonify({'current': path, 'parent': None, 'dirs': [], 'exists': False, 'error': '路径不存在'})
+
+    if not os.path.isdir(path):
+        return jsonify({'current': path, 'parent': None, 'dirs': [], 'exists': False, 'error': '不是目录'})
+
+    dirs = []
+    try:
+        for entry in os.listdir(path):
+            full = os.path.join(path, entry)
+            if os.path.isdir(full):
+                dirs.append({'name': entry, 'path': full})
+        dirs.sort(key=lambda x: x['name'].lower())
+    except PermissionError:
+        return jsonify({'current': path, 'parent': None, 'dirs': [], 'exists': True, 'error': '无访问权限'})
+
+    parent = os.path.dirname(path)
+    if os.name == 'nt' and len(path) <= 3 and path[1:] == ':\\':
+        parent = ''
+    elif os.name != 'nt' and path == '/':
+        parent = None
+
+    return jsonify({'current': path, 'parent': parent, 'dirs': dirs, 'exists': True})
 
 
 @bp.route('/api/settings/scan', methods=['POST'])

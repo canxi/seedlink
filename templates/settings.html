@@ -11,13 +11,23 @@
                 <form id="settingsForm">
                     <div class="mb-3">
                         <label for="sourceFolder" class="form-label">源文件夹路径</label>
-                        <input type="text" class="form-control" id="sourceFolder" name="source_folder" required>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="sourceFolder" name="source_folder" required>
+                            <button class="btn btn-outline-secondary browse-btn" type="button" data-target="sourceFolder">
+                                <i class="bi bi-folder2-open"></i> 浏览
+                            </button>
+                        </div>
                         <small class="text-muted">PT 下载目录，监控此文件夹中的新视频文件</small>
                     </div>
 
                     <div class="mb-3">
                         <label for="targetFolder" class="form-label">目标文件夹路径</label>
-                        <input type="text" class="form-control" id="targetFolder" name="target_folder" required>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="targetFolder" name="target_folder" required>
+                            <button class="btn btn-outline-secondary browse-btn" type="button" data-target="targetFolder">
+                                <i class="bi bi-folder2-open"></i> 浏览
+                            </button>
+                        </div>
                         <small class="text-muted">硬链接创建的目标目录</small>
                     </div>
 
@@ -120,6 +130,32 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="browseModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-folder2-open"></i> 选择文件夹</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-center mb-2">
+                    <button class="btn btn-sm btn-outline-secondary me-2" id="browseUpBtn" disabled>
+                        <i class="bi bi-arrow-up"></i> 上级
+                    </button>
+                    <code id="browseCurrentPath" class="flex-grow-1 text-truncate text-muted">/</code>
+                </div>
+                <div class="list-group" id="browseDirList" style="max-height: 400px; overflow-y: auto;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="browseSelectBtn" disabled>
+                    <i class="bi bi-check-lg"></i> 选择此目录
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -200,6 +236,109 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-save"></i> 保存设置';
     }
+});
+
+let _browseTarget = null;
+
+function openBrowser(targetInputId) {
+    _browseTarget = targetInputId;
+    const currentVal = document.getElementById(targetInputId).value;
+    const startPath = currentVal && currentVal.trim() ? currentVal.trim() : '';
+    loadBrowseDir(startPath);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('browseModal')).show();
+}
+
+async function loadBrowseDir(path) {
+    const listEl = document.getElementById('browseDirList');
+    const pathEl = document.getElementById('browseCurrentPath');
+    const upBtn = document.getElementById('browseUpBtn');
+    const selectBtn = document.getElementById('browseSelectBtn');
+
+    listEl.textContent = '';
+    const loading = document.createElement('div');
+    loading.className = 'text-center text-muted p-3';
+    loading.textContent = '加载中...';
+    listEl.appendChild(loading);
+    pathEl.textContent = path || '(盘符/根列表)';
+    upBtn.disabled = true;
+    selectBtn.disabled = true;
+
+    try {
+        const url = '/api/browse' + (path ? '?path=' + encodeURIComponent(path) : '');
+        const response = await fetch(url);
+        const data = await response.json();
+
+        listEl.textContent = '';
+
+        if (!data.exists) {
+            const errDiv = document.createElement('div');
+            errDiv.className = 'text-danger p-3';
+            errDiv.textContent = data.error || '路径不存在';
+            listEl.appendChild(errDiv);
+            return;
+        }
+
+        selectBtn.dataset.path = data.current || '';
+        selectBtn.disabled = !data.current;
+
+        if (data.parent === null) {
+            upBtn.disabled = true;
+            upBtn.dataset.parent = '';
+        } else {
+            upBtn.disabled = false;
+            upBtn.dataset.parent = data.parent || '';
+        }
+
+        if (!data.dirs || data.dirs.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'text-muted p-3';
+            empty.textContent = '无子目录';
+            listEl.appendChild(empty);
+            return;
+        }
+
+        data.dirs.forEach(function(d) {
+            const a = document.createElement('a');
+            a.href = 'javascript:void(0)';
+            a.className = 'list-group-item list-group-item-action d-flex align-items-center browse-item';
+            a.dataset.path = d.path;
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-folder me-2';
+            a.appendChild(icon);
+            a.appendChild(document.createTextNode(d.name));
+            listEl.appendChild(a);
+        });
+    } catch (error) {
+        listEl.textContent = '';
+        const errDiv = document.createElement('div');
+        errDiv.className = 'text-danger p-3';
+        errDiv.textContent = '加载失败: ' + error.message;
+        listEl.appendChild(errDiv);
+    }
+}
+
+document.getElementById('browseUpBtn').addEventListener('click', function() {
+    loadBrowseDir(this.dataset.parent || '');
+});
+
+document.getElementById('browseSelectBtn').addEventListener('click', function() {
+    if (_browseTarget && this.dataset.path) {
+        document.getElementById(_browseTarget).value = this.dataset.path;
+    }
+    bootstrap.Modal.getInstance(document.getElementById('browseModal')).hide();
+});
+
+document.getElementById('browseDirList').addEventListener('click', function(e) {
+    const item = e.target.closest('.browse-item');
+    if (item) {
+        loadBrowseDir(item.dataset.path);
+    }
+});
+
+document.querySelectorAll('.browse-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        openBrowser(this.dataset.target);
+    });
 });
 
 document.addEventListener('DOMContentLoaded', loadSettings);
