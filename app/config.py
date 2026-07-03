@@ -24,11 +24,12 @@ class Config:
         return cls._instance
 
     def _env_file_path(self) -> str:
-        # Docker 环境: /app/data/.env (通过 docker-compose 的 volumes ./data:/app/data 映射)
-        # 本地开发: .env.local
-        if os.path.exists('/app/data'):
-            return '/app/data/.env'
-        return '.env.local'
+        # Docker 环境: /app/config/.env (通过 docker-compose 挂载 .env.docker 到此)
+        # 用 /.dockerenv 判断容器环境(比 /app/data 路径检测健壮,避免 Windows 本机误判)
+        # 本地开发: 项目根目录的 .env.local (绝对路径,避免依赖工作目录)
+        if os.path.exists('/.dockerenv'):
+            return '/app/config/.env'
+        return os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env.local')
 
     def _write_env_file(self):
         """直接写入 .env 文件，不触发 reload"""
@@ -44,6 +45,7 @@ class Config:
             f"SCAN_INTERVAL={self._config['app']['scan_interval']}",
             f"CLEANUP_CRON={self._config['app']['cleanup_cron']}",
             f"VIDEO_EXTENSIONS={','.join(self._config['app']['video_extensions'])}",
+            f"DATABASE_URI={self._config['database']['uri']}",
             f"DEBUG={'true' if self._config['app']['debug'] else 'false'}",
         ]
 
@@ -148,7 +150,7 @@ class Config:
 
     @property
     def video_extensions(self) -> List[str]:
-        ext = self.get('app.video_extensions', ['.mkv', '.mp4', '.avi', '.ts'])
+        ext = self.get('app.video_extensions', ['.mkv', '.mp4', '.avi', '.ts', '.mov', '.wmv', '.flv'])
         if isinstance(ext, str):
             ext = ext.split(',')
         return ext
