@@ -47,10 +47,11 @@ def create_app():
         handlers=[file_handler, console_handler]
     )
 
-    # 初始化日志缓冲区
+    # 初始化日志缓冲区（仅记录业务日志，排除 werkzeug 存取日志）
     from app.utils.log_buffer import get_log_buffer
     handler = get_log_buffer()
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    handler.addFilter(lambda record: record.name != 'werkzeug')
     logging.getLogger().addHandler(handler)
 
     db.init_app(app)
