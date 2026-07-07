@@ -56,6 +56,14 @@
                     </div>
 
                     <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="generateNfo" name="generate_nfo">
+                            <label class="form-check-label" for="generateNfo">自动生成 NFO 元数据文件</label>
+                        </div>
+                        <small class="text-muted">为每个硬链接视频生成 .nfo 文件，供 Emby/Jellyfin/Kodi 识别和刮削（包含视频流、音频流、时长等信息）</small>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">视频文件扩展名</label>
                         <div class="row" id="extensionsContainer">
                             <div class="col-md-3">
@@ -188,6 +196,7 @@ async function loadSettings() {
         document.getElementById('scanInterval').value = data.scan_interval;
         document.getElementById('scanDelay').value = data.scan_delay;
         document.getElementById('cleanupCron').value = data.cleanup_cron;
+        document.getElementById('generateNfo').checked = data.generate_nfo;
 
         document.querySelectorAll('.extension-checkbox').forEach(cb => {
             cb.checked = data.video_extensions.includes(cb.value);
@@ -217,6 +226,7 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
         scan_interval: parseInt(document.getElementById('scanInterval').value),
         scan_delay: parseFloat(document.getElementById('scanDelay').value),
         cleanup_cron: document.getElementById('cleanupCron').value,
+        generate_nfo: document.getElementById('generateNfo').checked,
         video_extensions: extensions
     };
 

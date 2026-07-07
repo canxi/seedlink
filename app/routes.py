@@ -50,7 +50,8 @@ def get_settings():
         'scan_interval': config.scan_interval,
         'scan_delay': config.scan_delay,
         'cleanup_cron': config.cleanup_cron,
-        'video_extensions': config.video_extensions
+        'video_extensions': config.video_extensions,
+        'generate_nfo': config.generate_nfo
     }
     return jsonify(settings_data)
 
@@ -73,6 +74,8 @@ def update_settings():
         config.set('app.video_extensions', data['video_extensions'])
     if 'cleanup_cron' in data:
         config.set('app.cleanup_cron', data['cleanup_cron'])
+    if 'generate_nfo' in data:
+        config.set('app.generate_nfo', data['generate_nfo'])
 
     config.save()
 

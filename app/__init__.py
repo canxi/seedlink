@@ -4,8 +4,15 @@ from flask import Flask
 from app.models import db
 from app.config import config
 
+# 模块级缓存，避免重复创建 Flask 实例导致的日志 handler 重复注册和数据库重复初始化
+_app_instance = None
+
 
 def create_app():
+    global _app_instance
+    if _app_instance is not None:
+        return _app_instance
+
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     template_dir = os.path.join(base_dir, 'templates')
     static_dir = os.path.join(base_dir, 'static')
@@ -62,4 +69,5 @@ def create_app():
     from app.routes import bp
     app.register_blueprint(bp)
 
+    _app_instance = app
     return app

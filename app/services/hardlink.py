@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Optional, Tuple, List
 from app.models import db, HardLink
 from app.utils.video import get_video_duration, get_video_info
+from app.config import config
+from app.services.nfo import NfoService
 
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,15 @@ class HardLinkService:
             db.session.add(link_record)
             db.session.commit()
 
+            # 生成 NFO 元数据文件
+            if config.generate_nfo:
+                try:
+                    nfo_ok, nfo_msg = NfoService.generate_nfo(target_path)
+                    if not nfo_ok:
+                        logger.warning(f"NFO 生成失败: {nfo_msg}")
+                except Exception as nfo_err:
+                    logger.warning(f"NFO 生成异常: {nfo_err}")
+
             logger.info(f"成功创建硬链接: {source_path} -> {target_path}")
             return True, "硬链接创建成功"
 
@@ -78,6 +89,9 @@ class HardLinkService:
             if delete_file and os.path.exists(link_record.link_path):
                 os.remove(link_record.link_path)
                 logger.info(f"删除硬链接文件: {link_record.link_path}")
+
+            # 删除对应的 NFO 文件
+            NfoService.remove_nfo(link_record.link_path)
 
             link_record.is_active = False
             db.session.commit()
@@ -103,6 +117,8 @@ class HardLinkService:
                     os.remove(link.link_path)
                     logger.info(f"删除硬链接文件: {link.link_path}")
                     deleted_count += 1
+                # 删除对应的 NFO 文件
+                NfoService.remove_nfo(link.link_path)
                 link.is_active = False
             except Exception as e:
                 errors.append(f"{link.link_path}: {str(e)}")
@@ -178,6 +194,8 @@ class HardLinkService:
                     if os.path.exists(link.link_path):
                         os.remove(link.link_path)
                         logger.info(f"清理已删除源文件的硬链接: {link.link_path}")
+                    # 清理对应的 NFO 文件
+                    NfoService.remove_nfo(link.link_path)
                     link.is_active = False
                     cleaned += 1
                     logger.info(f"标记非活跃(源文件已删除): {link.source_path}")

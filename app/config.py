@@ -47,6 +47,7 @@ class Config:
             f"CLEANUP_CRON={self._config['app']['cleanup_cron']}",
             f"VIDEO_EXTENSIONS={','.join(self._config['app']['video_extensions'])}",
             f"DATABASE_URI={self._config['database']['uri']}",
+            f"GENERATE_NFO={'true' if self._config['app']['generate_nfo'] else 'false'}",
             f"DEBUG={'true' if self._config['app']['debug'] else 'false'}",
         ]
 
@@ -66,6 +67,7 @@ class Config:
                 'scan_delay': float(os.environ.get('SCAN_DELAY', 1.0)),
                 'cleanup_cron': os.environ.get('CLEANUP_CRON', '0 3 * * *'),
                 'video_extensions': os.environ.get('VIDEO_EXTENSIONS', '.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv').split(','),
+                'generate_nfo': os.environ.get('GENERATE_NFO', 'true').lower() == 'true',
                 'debug': os.environ.get('DEBUG', 'false').lower() == 'true'
             },
             'database': {
@@ -160,6 +162,10 @@ class Config:
         if isinstance(ext, str):
             ext = ext.split(',')
         return ext
+
+    @property
+    def generate_nfo(self) -> bool:
+        return self.get('app.generate_nfo', True)
 
     @property
     def debug(self) -> bool:

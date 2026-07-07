@@ -46,11 +46,13 @@ def get_video_duration(file_path: str) -> Optional[float]:
 
 
 def get_video_info(file_path: str) -> dict:
-    """获取视频文件的详细信息"""
+    """获取视频文件的详细信息（含视频流和音频流）"""
     info = {
         'duration': 0.0,
         'size': 0,
-        'format': None
+        'format': None,
+        'video': None,
+        'audio': None
     }
 
     if not os.path.exists(file_path):
@@ -75,6 +77,34 @@ def get_video_info(file_path: str) -> dict:
             info['duration'] = float(format_info.get('duration', 0))
             info['size'] = int(format_info.get('size', 0))
             info['format'] = format_info.get('format_name')
+
+            # 提取视频流和音频流信息
+            for stream in data.get('streams', []):
+                codec_type = stream.get('codec_type', '')
+                if codec_type == 'video' and info['video'] is None:
+                    # 解析帧率 (如 "24000/1001" → 23.976)
+                    fps = 0.0
+                    r_frame_rate = stream.get('r_frame_rate', '0/1')
+                    try:
+                        num, den = r_frame_rate.split('/')
+                        den_val = float(den) if float(den) != 0 else 1
+                        fps = round(float(num) / den_val, 3)
+                    except (ValueError, ZeroDivisionError):
+                        pass
+
+                    info['video'] = {
+                        'codec': stream.get('codec_name', ''),
+                        'width': int(stream.get('width', 0)),
+                        'height': int(stream.get('height', 0)),
+                        'fps': fps,
+                        'bitrate': int(stream.get('bit_rate', 0)) if stream.get('bit_rate') else 0
+                    }
+                elif codec_type == 'audio' and info['audio'] is None:
+                    info['audio'] = {
+                        'codec': stream.get('codec_name', ''),
+                        'channels': int(stream.get('channels', 0)),
+                        'language': stream.get('tags', {}).get('language', '')
+                    }
 
     except (subprocess.TimeoutExpired, json.JSONDecodeError, ValueError):
         pass
