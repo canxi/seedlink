@@ -56,7 +56,7 @@ open http://localhost:5000
 SOURCE_FOLDER=/downloads
 TARGET_FOLDER=/media
 MIN_DURATION=600
-SCAN_INTERVAL=60
+SCAN_CRON=0 5 * * *
 VIDEO_EXTENSIONS=.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv
 DEBUG=false
 ```
@@ -66,7 +66,7 @@ DEBUG=false
 | `SOURCE_FOLDER` | `/downloads` | 源文件夹（PT下载目录） |
 | `TARGET_FOLDER` | `/media` | 目标文件夹（媒体库目录） |
 | `MIN_DURATION` | `600` | 最小视频时长（秒），过滤短视频 |
-| `SCAN_INTERVAL` | `60` | 扫描间隔（秒） |
+| `SCAN_CRON` | `0 5 * * *` | 自动扫描 Cron 表达式（默认每天凌晨5点） |
 | `VIDEO_EXTENSIONS` | `.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv` | 支持的视频格式 |
 | `DEBUG` | `false` | 调试模式 |
 

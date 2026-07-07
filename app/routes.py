@@ -47,7 +47,7 @@ def get_settings():
         'source_folder': config.source_folder,
         'target_folder': config.target_folder,
         'min_duration': config.min_duration,
-        'scan_interval': config.scan_interval,
+        'scan_cron': config.scan_cron,
         'scan_delay': config.scan_delay,
         'cleanup_cron': config.cleanup_cron,
         'video_extensions': config.video_extensions,
@@ -66,8 +66,8 @@ def update_settings():
         config.set('app.target_folder', data['target_folder'])
     if 'min_duration' in data:
         config.set('app.min_duration', int(data['min_duration']))
-    if 'scan_interval' in data:
-        config.set('app.scan_interval', int(data['scan_interval']))
+    if 'scan_cron' in data:
+        config.set('app.scan_cron', data['scan_cron'])
     if 'scan_delay' in data:
         config.set('app.scan_delay', float(data['scan_delay']))
     if 'video_extensions' in data:

@@ -12,7 +12,6 @@ import threading
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.schedulers import SchedulerAlreadyRunningError
 from apscheduler.events import (
     EVENT_JOB_SUBMITTED, EVENT_JOB_EXECUTED, EVENT_JOB_ERROR, EVENT_JOB_MISSED
@@ -80,11 +79,17 @@ class SchedulerService:
         )
         logger.info(f"已注册任务 'cleanup_deleted_sources' 触发规则: {cron_expr}")
 
-        # 自动扫描建链任务(interval 触发)
-        scan_interval = config.scan_interval
+        # 自动扫描建链任务(cron 触发)
+        scan_cron_expr = config.scan_cron
+        try:
+            scan_trigger = CronTrigger.from_crontab(scan_cron_expr)
+        except Exception as e:
+            logger.error(f"SCAN_CRON 表达式无效 '{scan_cron_expr}',回退默认 '0 5 * * *': {e}")
+            scan_trigger = CronTrigger.from_crontab('0 5 * * *')
+
         self._scheduler.add_job(
             func=self._scan_and_create_hardlinks_job,
-            trigger=IntervalTrigger(seconds=scan_interval),
+            trigger=scan_trigger,
             id='scan_and_create_hardlinks',
             name='自动扫描并创建硬链接',
             replace_existing=True,
@@ -92,7 +97,7 @@ class SchedulerService:
             max_instances=1,
             misfire_grace_time=3600
         )
-        logger.info(f"已注册任务 'scan_and_create_hardlinks' 触发规则: 每 {scan_interval} 秒")
+        logger.info(f"已注册任务 'scan_and_create_hardlinks' 触发规则: {scan_cron_expr}")
 
     def _on_job_event(self, event):
         """APScheduler 事件回调,跟踪任务执行状态"""
