@@ -63,6 +63,32 @@
                         <small class="text-muted">为每个硬链接视频生成 .nfo 文件，供 Emby/Jellyfin/Kodi 识别和刮削（包含视频流、音频流、时长等信息）</small>
                     </div>
 
+                    <div class="border rounded p-3 mb-3">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="smartRename" name="smart_rename">
+                            <label class="form-check-label" for="smartRename">智能精简硬链接文件名</label>
+                        </div>
+                        <p class="small text-muted mb-2">使用本地 jieba 分词和 TF-IDF，从中文长描述中提取最多 6 个关键词，按原文顺序组合短标题。先清理网址、推广及技术标签，不调用云端模型或影视数据库。</p>
+                        <p class="small text-muted mb-2">关键词提取不等于理解内容，特殊昵称可能被拆分，请先预览。jieba 未安装或提取失败时，处理说明会提示已回退到规则精简。</p>
+                        <p class="small text-muted mb-2">遇到 V1、V2、001 等无意义名称，向上查找最近的有效目录标题，保留原编号，例如“夜景拍摄/V1.mp4”→“夜景拍摄/夜景拍摄 - V1.mp4”。跳过“下载”“视频”等通用目录，最多回溯到源目录。</p>
+                        <p class="small text-muted mb-3">仅对保存设置后新建的链接生效，保留目录结构，不修改源文件或已有链接。文件名及目录均无有效标题时保留原名；重名时追加短标识，不覆盖文件。</p>
+                        <label for="renameMaxLength" class="form-label">标题长度上限</label>
+                        <input type="number" class="form-control mb-1" id="renameMaxLength" name="rename_max_length" min="20" max="80" step="1" value="60" required>
+                        <div class="small text-muted mb-3">20～80 字符，默认 60，不含扩展名及重名标识。中文达到 24 个汉字，或含至少 8 个汉字且超长时启用关键词提取；短标题沿用规则清洗。优先保留日期、季集和编号，无法兼顾时保留原名。</div>
+                        <label for="renameSamples" class="form-label">试试看：粘贴文件名或相对路径预览</label>
+                        <textarea class="form-control mb-2" id="renameSamples" rows="5" maxlength="20500" placeholder="每行一个文件名或源目录内的相对路径（含扩展名），最多 20 个&#10;夜景拍摄/V1.mp4&#10;夜景拍摄/V2.mp4&#10;【某站首发】摄影教程_摄影教程_夜景拍摄技巧【1080P】.mp4&#10;今天带你一起学习夜景摄影技巧 掌握相机曝光参数 拍摄清晰城市灯光照片.mp4"></textarea>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="btnRenamePreview">
+                            <i class="bi bi-eye"></i> 预览精简效果
+                        </button>
+                        <div class="small text-muted mt-2">预览不读写视频。填写相对路径可验证目录回退，支持 / 和 \ 分隔；只填文件名时，最多使用已保存的源目录名称。实际创建时如有同名文件或 NFO，文件名可能追加标识。</div>
+                        <div class="table-responsive mt-3" id="renamePreviewResult" hidden aria-live="polite">
+                            <table class="table table-sm mb-0">
+                                <thead><tr><th>原文件名</th><th>精简结果</th><th>处理说明</th></tr></thead>
+                                <tbody id="renamePreviewRows"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label">视频文件扩展名</label>
                         <div class="row" id="extensionsContainer">
@@ -197,6 +223,8 @@ async function loadSettings() {
         document.getElementById('scanDelay').value = data.scan_delay;
         document.getElementById('cleanupCron').value = data.cleanup_cron;
         document.getElementById('generateNfo').checked = data.generate_nfo;
+        document.getElementById('smartRename').checked = data.smart_rename;
+        document.getElementById('renameMaxLength').value = data.rename_max_length;
 
         document.querySelectorAll('.extension-checkbox').forEach(cb => {
             cb.checked = data.video_extensions.includes(cb.value);
@@ -227,6 +255,8 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
         scan_delay: parseFloat(document.getElementById('scanDelay').value),
         cleanup_cron: document.getElementById('cleanupCron').value,
         generate_nfo: document.getElementById('generateNfo').checked,
+        smart_rename: document.getElementById('smartRename').checked,
+        rename_max_length: Number(document.getElementById('renameMaxLength').value),
         video_extensions: extensions
     };
 
@@ -237,11 +267,11 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
             body: JSON.stringify(data)
         });
 
+        const result = await response.json();
         if (!response.ok) {
-            throw new Error('HTTP ' + response.status);
+            throw new Error(result.message || 'HTTP ' + response.status);
         }
 
-        const result = await response.json();
         if (result.success) {
             showToast(result.message || '设置已保存', 'success');
         } else {
@@ -253,6 +283,67 @@ document.getElementById('settingsForm').addEventListener('submit', async functio
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-save"></i> 保存设置';
+    }
+});
+
+const renameSamples = document.getElementById('renameSamples');
+const renameMaxLength = document.getElementById('renameMaxLength');
+const renamePreviewResult = document.getElementById('renamePreviewResult');
+const renamePreviewRows = document.getElementById('renamePreviewRows');
+let renamePreviewVersion = 0;
+
+[renameSamples, renameMaxLength].forEach(input => {
+    input.addEventListener('input', () => {
+        renamePreviewVersion += 1;
+        renamePreviewResult.hidden = true;
+        renamePreviewRows.textContent = '';
+    });
+});
+
+document.getElementById('btnRenamePreview').addEventListener('click', async function() {
+    const filenames = renameSamples.value.split(/\r?\n/).map(name => name.trim()).filter(Boolean);
+    const maxLength = Number(renameMaxLength.value);
+    if (!filenames.length || filenames.length > 20) {
+        showToast('请输入 1～20 个文件名或相对路径，每行一个', 'warning');
+        return;
+    }
+    if (!Number.isInteger(maxLength) || maxLength < 20 || maxLength > 80) {
+        showToast('标题长度必须是 20～80 的整数', 'warning');
+        return;
+    }
+    const version = ++renamePreviewVersion;
+    this.disabled = true;
+    this.textContent = '预览中...';
+    renamePreviewResult.hidden = true;
+    renamePreviewRows.textContent = '';
+    try {
+        const response = await fetch('/api/settings/rename-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filenames, max_length: maxLength })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || '预览失败');
+        }
+        if (version !== renamePreviewVersion) return;
+        data.results.forEach(item => {
+            const row = document.createElement('tr');
+            const status = item.fallback ? '保留原名：' : (item.changed ? '' : '名称不变：');
+            [item.original, item.filename, status + item.reasons.join('；')].forEach(text => {
+                const cell = document.createElement('td');
+                cell.className = 'text-break small';
+                cell.textContent = text;
+                row.appendChild(cell);
+            });
+            renamePreviewRows.appendChild(row);
+        });
+        renamePreviewResult.hidden = false;
+    } catch (error) {
+        showToast('预览失败: ' + error.message, 'danger');
+    } finally {
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-eye"></i> 预览精简效果';
     }
 });
 

@@ -3,7 +3,9 @@
 """
 
 import os
+import hashlib
 import logging
+import threading
 from pathlib import Path
 from typing import Optional, Tuple, List
 from app.models import db, HardLink
@@ -17,8 +19,13 @@ logger = logging.getLogger(__name__)
 
 class HardLinkService:
 
+    # 精简名称的分配与 NFO 创建保持串行，避免扫描和监控抢占同一标题。
+    _rename_lock = threading.Lock()
+
     @staticmethod
-    def create_hardlink(source_path: str, target_path: str, duration: float = 0, file_size: int = 0, md5: str = None) -> Tuple[bool, str]:
+    def create_hardlink(source_path: str, target_path: str, duration: float = 0, file_size: int = 0, md5: str = None, smart_rename: bool = False) -> Tuple[bool, str]:
+        if smart_rename:
+            HardLinkService._rename_lock.acquire()
         try:
             src = Path(source_path)
             dest = Path(target_path)
@@ -26,7 +33,7 @@ class HardLinkService:
             if not src.exists():
                 return False, f"源文件不存在: {source_path}"
 
-            if dest.exists():
+            if not smart_rename and os.path.lexists(dest):
                 return False, f"目标文件已存在: {target_path}"
 
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -34,8 +41,36 @@ class HardLinkService:
             logger.info(f"[诊断] 创建硬链接前 - 源: {src}, 目标: {dest}")
             logger.info(f"[诊断] 源文件 stat: {src.stat()}")
 
-            # 使用 pathlib 创建硬链接
-            dest.hardlink_to(src)
+            display_title = dest.stem if smart_rename else None
+            original_dest = dest
+            occupied_stems = {entry.stem.casefold() for entry in dest.parent.iterdir()} if smart_rename else set()
+            # 同名时使用稳定的源路径摘要；通过原子创建处理并发冲突，不覆盖文件。
+            digest = hashlib.sha256(os.path.normcase(os.path.abspath(source_path)).encode('utf-8')).hexdigest()[:8]
+            for attempt in range(100 if smart_rename else 1):
+                if attempt:
+                    suffix = f' - {digest}' + (f'-{attempt}' if attempt > 1 else '')
+                    short_stem = original_dest.stem.encode('utf-8')[:200].decode('utf-8', errors='ignore').rstrip(' .')
+                    dest = original_dest.with_name(short_stem + suffix + original_dest.suffix)
+                if smart_rename:
+                    if os.path.lexists(dest):
+                        if dest.is_file() and os.path.samefile(src, dest):
+                            return False, f"目标已是此源文件的硬链接: {dest}"
+                        continue
+                    # 不复用已有 NFO 的名称，避免不同视频共享元数据文件。
+                    if dest.stem.casefold() in occupied_stems or os.path.lexists(dest.with_suffix('.nfo')):
+                        continue
+                try:
+                    # 使用 pathlib 创建硬链接
+                    dest.hardlink_to(src)
+                    break
+                except FileExistsError:
+                    if not smart_rename:
+                        raise
+            else:
+                return False, '目标名称冲突过多，未创建硬链接'
+            target_path = str(dest)
+            if dest != original_dest:
+                logger.info(f"目标重名，自动追加标识: {original_dest} -> {dest}")
 
             # 验证硬链接是否有效（检查 inode 是否相同）
             if dest.stat().st_ino != src.stat().st_ino:
@@ -61,7 +96,7 @@ class HardLinkService:
             # 生成 NFO 元数据文件
             if config.generate_nfo:
                 try:
-                    nfo_ok, nfo_msg = NfoService.generate_nfo(target_path)
+                    nfo_ok, nfo_msg = NfoService.generate_nfo(target_path, display_title=display_title)
                     if not nfo_ok:
                         logger.warning(f"NFO 生成失败: {nfo_msg}")
                 except Exception as nfo_err:
@@ -78,6 +113,9 @@ class HardLinkService:
             db.session.rollback()
             logger.error(f"创建硬链接时发生错误: {e}")
             return False, f"发生错误: {str(e)}"
+        finally:
+            if smart_rename:
+                HardLinkService._rename_lock.release()
 
     @staticmethod
     def remove_hardlink(link_id: int, delete_file: bool = True) -> Tuple[bool, str]:

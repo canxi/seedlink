@@ -115,7 +115,7 @@ class NfoService:
         return result
 
     @staticmethod
-    def generate_nfo(video_path: str) -> Tuple[bool, str]:
+    def generate_nfo(video_path: str, display_title: Optional[str] = None) -> Tuple[bool, str]:
         """
         为视频文件生成 .nfo 元数据文件
 
@@ -137,6 +137,9 @@ class NfoService:
         # 解析文件名
         filename = os.path.basename(video_path)
         parsed = NfoService.parse_filename(filename)
+        if display_title is not None:
+            # 精简后的标题已经确定，避免再次按电影年份规则裁掉有效文字。
+            parsed['title'] = display_title
 
         # 生成 XML
         xml_str = NfoService._build_nfo_xml(info, parsed)
@@ -144,7 +147,8 @@ class NfoService:
         # 写入 .nfo 文件
         nfo_path = os.path.splitext(video_path)[0] + '.nfo'
         try:
-            with open(nfo_path, 'w', encoding='utf-8') as f:
+            mode = 'x' if display_title is not None else 'w'
+            with open(nfo_path, mode, encoding='utf-8') as f:
                 f.write(xml_str)
             logger.info(f"已生成 NFO 文件: {nfo_path}")
             return True, f"NFO 已生成: {nfo_path}"

@@ -8,7 +8,7 @@ import time
 import threading
 from typing import List, Tuple
 from app.config import config
-from app.utils.video import get_video_duration, get_video_info
+from app.utils.video import get_video_duration, get_video_info, simplify_video_filename
 from app.services.hardlink import HardLinkService
 from app.services.duplicate_filter import DuplicateFilterService
 
@@ -28,6 +28,8 @@ class ScannerService:
         self.min_duration = config.min_duration
         self.video_extensions = config.video_extensions
         self.scan_delay = config.scan_delay
+        self.smart_rename = config.smart_rename
+        self.rename_max_length = config.rename_max_length
 
     def refresh_config(self):
         config.reload()
@@ -36,6 +38,8 @@ class ScannerService:
         self.min_duration = config.min_duration
         self.video_extensions = config.video_extensions
         self.scan_delay = config.scan_delay
+        self.smart_rename = config.smart_rename
+        self.rename_max_length = config.rename_max_length
 
     @classmethod
     def is_scanning(cls) -> bool:
@@ -70,6 +74,22 @@ class ScannerService:
 
     def get_target_path(self, source_path: str) -> str:
         relative_path = self.get_relative_path(source_path)
+        if relative_path == os.pardir or relative_path.startswith(os.pardir + os.sep) or os.path.isabs(relative_path):
+            raise ValueError('源文件不在配置的源目录内')
+        if self.smart_rename:
+            parent_names = []
+            parent_path = os.path.dirname(relative_path)
+            while parent_path:
+                parent_names.append(os.path.basename(parent_path))
+                parent_path = os.path.dirname(parent_path)
+            # 最多回溯至源目录，不使用源目录以外的路径信息。
+            parent_names.append(os.path.basename(os.path.normpath(self.source_folder)))
+            result = simplify_video_filename(
+                os.path.basename(relative_path), self.rename_max_length, parent_names
+            )
+            relative_path = os.path.join(os.path.dirname(relative_path), result['filename'])
+            if result['changed']:
+                logger.info(f"智能精简: {result['original']} -> {result['filename']}")
         return os.path.join(self.target_folder, relative_path)
 
     def scan_and_create_hardlinks(self) -> Tuple[int, int, List[str], List[str]]:
@@ -133,7 +153,8 @@ class ScannerService:
                         target_path=target_path,
                         duration=duration,
                         file_size=file_size,
-                        md5=file_md5
+                        md5=file_md5,
+                        smart_rename=self.smart_rename
                     )
 
                     if success:

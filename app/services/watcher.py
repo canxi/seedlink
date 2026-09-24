@@ -71,7 +71,8 @@ class VideoFileHandler(FileSystemEventHandler):
                     source_path=file_path,
                     target_path=target_path,
                     duration=duration,
-                    file_size=file_size
+                    file_size=file_size,
+                    smart_rename=self.scanner.smart_rename
                 )
 
                 if success:

@@ -48,6 +48,8 @@ class Config:
             f"VIDEO_EXTENSIONS={','.join(self._config['app']['video_extensions'])}",
             f"DATABASE_URI={self._config['database']['uri']}",
             f"GENERATE_NFO={'true' if self._config['app']['generate_nfo'] else 'false'}",
+            f"SMART_RENAME={'true' if self._config['app']['smart_rename'] else 'false'}",
+            f"RENAME_MAX_LENGTH={self._config['app']['rename_max_length']}",
             f"DEBUG={'true' if self._config['app']['debug'] else 'false'}",
         ]
 
@@ -58,6 +60,13 @@ class Config:
 
     def _load_config(self):
         """从环境变量加载配置到内存"""
+        try:
+            rename_max_length = int(os.environ.get('RENAME_MAX_LENGTH', 60))
+            if not 20 <= rename_max_length <= 80:
+                raise ValueError
+        except (TypeError, ValueError):
+            logger.warning('RENAME_MAX_LENGTH 无效，使用默认值 60')
+            rename_max_length = 60
         self._config = {
             'app': {
                 'source_folder': os.environ.get('SOURCE_FOLDER', '/downloads'),
@@ -68,6 +77,8 @@ class Config:
                 'cleanup_cron': os.environ.get('CLEANUP_CRON', '0 3 * * *'),
                 'video_extensions': os.environ.get('VIDEO_EXTENSIONS', '.mkv,.mp4,.avi,.ts,.mov,.wmv,.flv').split(','),
                 'generate_nfo': os.environ.get('GENERATE_NFO', 'true').lower() == 'true',
+                'smart_rename': os.environ.get('SMART_RENAME', 'false').lower() == 'true',
+                'rename_max_length': rename_max_length,
                 'debug': os.environ.get('DEBUG', 'false').lower() == 'true'
             },
             'database': {
@@ -166,6 +177,14 @@ class Config:
     @property
     def generate_nfo(self) -> bool:
         return self.get('app.generate_nfo', True)
+
+    @property
+    def smart_rename(self) -> bool:
+        return self.get('app.smart_rename', False)
+
+    @property
+    def rename_max_length(self) -> int:
+        return self.get('app.rename_max_length', 60)
 
     @property
     def debug(self) -> bool:

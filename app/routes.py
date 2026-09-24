@@ -8,7 +8,7 @@ from app.services.hardlink import HardLinkService
 from app.services.scanner import ScannerService
 from app.services.watcher import get_watcher
 from app.services.scheduler import get_scheduler
-from app.utils.video import format_duration, format_size
+from app.utils.video import format_duration, format_size, simplify_video_filename
 
 
 bp = Blueprint('main', __name__)
@@ -51,14 +51,24 @@ def get_settings():
         'scan_delay': config.scan_delay,
         'cleanup_cron': config.cleanup_cron,
         'video_extensions': config.video_extensions,
-        'generate_nfo': config.generate_nfo
+        'generate_nfo': config.generate_nfo,
+        'smart_rename': config.smart_rename,
+        'rename_max_length': config.rename_max_length
     }
     return jsonify(settings_data)
 
 
 @bp.route('/api/settings', methods=['PUT'])
 def update_settings():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'message': '设置必须是 JSON 对象'}), 400
+    if 'smart_rename' in data and type(data['smart_rename']) is not bool:
+        return jsonify({'success': False, 'message': '智能精简开关必须是布尔值'}), 400
+    if 'rename_max_length' in data:
+        length = data['rename_max_length']
+        if type(length) is not int or not 20 <= length <= 80:
+            return jsonify({'success': False, 'message': '标题长度必须是 20～80 的整数'}), 400
 
     if 'source_folder' in data:
         config.set('app.source_folder', data['source_folder'])
@@ -76,6 +86,10 @@ def update_settings():
         config.set('app.cleanup_cron', data['cleanup_cron'])
     if 'generate_nfo' in data:
         config.set('app.generate_nfo', data['generate_nfo'])
+    if 'smart_rename' in data:
+        config.set('app.smart_rename', data['smart_rename'])
+    if 'rename_max_length' in data:
+        config.set('app.rename_max_length', data['rename_max_length'])
 
     config.save()
 
@@ -88,6 +102,50 @@ def update_settings():
         scheduler.restart()
 
     return jsonify({'success': True, 'message': '设置已保存'})
+
+
+@bp.route('/api/settings/rename-preview', methods=['POST'])
+def preview_rename():
+    """仅处理用户输入的文件名；不扫描目录、保存设置或创建链接。"""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'message': '预览参数必须是 JSON 对象'}), 400
+    filenames = data.get('filenames')
+    max_length = data.get('max_length', config.rename_max_length)
+    if type(max_length) is not int or not 20 <= max_length <= 80:
+        return jsonify({'success': False, 'message': '标题长度必须是 20～80 的整数'}), 400
+    if not isinstance(filenames, list) or not 1 <= len(filenames) <= 20:
+        return jsonify({'success': False, 'message': '每次请输入 1～20 个视频文件名'}), 400
+    extensions = {ext.lower() for ext in config.video_extensions}
+    parsed_paths = []
+    for filename in filenames:
+        if (not isinstance(filename, str) or not filename.strip() or len(filename) > 1024
+                or any(char in filename for char in '\r\n\x00')):
+            return jsonify({'success': False, 'message': '每行请输入一个文件名或相对路径，不超过 1024 字符'}), 400
+        parts = filename.replace('\\', '/').split('/')
+        if any(part in ('', '.', '..') for part in parts) or parts[0].endswith(':'):
+            return jsonify({'success': False, 'message': '请输入源目录内的相对路径，不含盘符、空目录或 ..'}), 400
+        if os.path.splitext(parts[-1])[1].lower() not in extensions:
+            return jsonify({'success': False, 'message': '请包含已配置的视频扩展名，如 .mp4 或 .mkv'}), 400
+        parsed_paths.append(parts)
+    source_name = os.path.basename(os.path.normpath(config.source_folder))
+    results = []
+    for original, parts in zip(filenames, parsed_paths):
+        parents = list(reversed(parts[:-1])) + [source_name]
+        item = simplify_video_filename(parts[-1], max_length, parents)
+        separator = '\\' if '\\' in original and '/' not in original else '/'
+        item['original'] = original
+        item['filename'] = separator.join(parts[:-1] + [item['filename']])
+        results.append(item)
+    title_counts = {}
+    for item in results:
+        key = os.path.splitext(item['filename'].replace('\\', '/'))[0].casefold()
+        title_counts[key] = title_counts.get(key, 0) + 1
+    for item in results:
+        key = os.path.splitext(item['filename'].replace('\\', '/'))[0].casefold()
+        if title_counts[key] > 1:
+            item['reasons'].append('预览中标题重名，实际创建时将按需追加标识')
+    return jsonify({'success': True, 'results': results})
 
 
 @bp.route('/api/browse', methods=['GET'])
